@@ -1,3 +1,8 @@
+import sys
+import os
+
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 """
 Instance Loader Module
 Loads and manages instance data for the bilevel optimization model
@@ -13,8 +18,8 @@ class InstanceData:
         """Initialize instance data from test_instance module"""
         from test_instance import (
             # Sets
-            G_max, S_max, W_max, I_max, L_max, C_max, K_max, F_max, H_max,
-            G, S, W, I, L, C, K, F, H,
+            G_max, S_max, W_max, I_max, L_max, C_max, K_max, F_max, H_max, J_max,
+            G, S, W, I, L, C, K, F, H, J,
             # Leader parameters
             TD_gs, TD_sl, TD_si, TD_si_avg, TD_sc,
             epsilon_truck, epsilon_land, epsilon_inc, epsilon_kiln_w, epsilon_kiln_f,
@@ -38,6 +43,8 @@ class InstanceData:
         self.K_max = K_max
         self.F_max = F_max
         self.H_max = H_max
+
+        self.J_max = J_max
         
         self.G = G
         self.S = S
@@ -48,6 +55,8 @@ class InstanceData:
         self.K = K
         self.F = F
         self.H = H
+
+        self.J = J
         
         # ===== LEADER (MUNICIPALITY) PARAMETERS =====
         self.TD_gs = TD_gs

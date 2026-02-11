@@ -71,7 +71,7 @@ class ShanghaiInstance:
     kappa_coproc: float             # Maximum co-processing quota/capacity
     budget_municipality: float      # Budget for the municipality
     phi_max: List[float]            # Maximum subsidy levels for waste types (CNY/ton)
-    subsidy_wh: List[List[float]]   # phi[w][h] Subsidy levels for waste types
+    phi_wh: List[List[float]]   # phi[w][h] Subsidy levels for waste types
     
     # Follower parameters
     price_f: List[float]        # p[f] Price of coal types (CNY/t)
@@ -217,7 +217,7 @@ def make_shanghai_instance(seed: int = 7) -> ShanghaiInstance:
 
     budget_municipality = 1_800_000.0  # scale up vs small toy
     phi_max = [220.0, 175.0]  # [high moisture, medium moisture]
-    subsidy_wh = [[(h / (H_max - 1)) * phi_max[w] for h in H] for w in W]
+    phi_wh = [[(h / (H_max - 1)) * phi_max[w] for h in H] for w in W]
 
     # -----------------------------
     # FOLLOWER: coal types, costs, kiln demands
@@ -266,7 +266,7 @@ def make_shanghai_instance(seed: int = 7) -> ShanghaiInstance:
         kappa_land=kappa_land, kappa_coproc=kappa_coproc,
         budget_municipality=budget_municipality,
         phi_max=phi_max,
-        subsidy_wh=subsidy_wh,
+        phi_wh=phi_wh,
         price_f=price_f, beta_f=beta_f,
         alpha_c=alpha_c, beta_w=beta_w,
         c_invest_k=c_invest_k, c_preproc_w=c_preproc_w,

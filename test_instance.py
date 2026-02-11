@@ -13,6 +13,8 @@ K_max = 2        # Number of Pre and Co-processing capacities
 F_max = 1        # Number of Coal types as conservative fuel
 H_max = 5        # Number of Subsidy levels
 
+J_max = 0        # Number of KKT conditions for fixed investment decision solutions of lower level problem (for cut generation)
+
 G = range(G_max) # Set of Generation spots
 S = range(S_max) # Set of Transfer stations
 W = range(W_max) # Set of Waste types
@@ -22,6 +24,8 @@ C = range(C_max) # Set of Cement facilities
 K = range(K_max) # Set of Pre and Co-processing capacities
 F = range(F_max) # Set of Coal types as conservative fuel
 H = range(H_max) # Set of Subsidy levels
+
+J = range(J_max) # Set of KKT conditions for fixed investment decision solutions of lower level problem (for cut generation)
 
 ############ Parameters ############
 #### Leader - Municipality ####
@@ -60,7 +64,7 @@ phi_wh = [[(h / (H_max-1)) * phi_max[w] for h in range(H_max)] for w in range(W_
 price_f = [650]              # Price of coal (CNY/ton)
 c_invest_k = [70000000,125000000] # Investment cost for pre- & co-processing capacity expansion at Cement facilities depending on size k (CNY)
 c_preproc_w = [150.0, 110.0]    # Pre-processing cost (CNY/ton)
-c_penalty = 160                 # Penalty cost for denying allocated waste quota (CNY/ton)
+c_penalty = 100                 # Penalty cost for denying allocated waste quota (CNY/ton)
 budget_cem = 150000000          # Cement facility budget for investing in pre- & co-processing (CNY)
 alpha_c = [10000,8000]       # Energy content needed in cement kiln (GJ/ton)
 beta_f = [25]                # Energy content of coal (GJ/ton)
