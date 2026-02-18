@@ -24,7 +24,7 @@ class InstanceData:
             TD_gs, TD_sl, TD_si, TD_si_avg, TD_sc,
             epsilon_truck, epsilon_land, epsilon_inc, epsilon_kiln_w, epsilon_kiln_f,
             c_truck, c_land, c_inc,
-            Q_gw, Q_s, Q_l, Q_i, Q_k, Q_k_max,
+            Q_gw, Q_gen_total,Q_s, Q_l, Q_i, Q_k, Q_k_max,
             weight_env, weight_mon, kappa_land, kappa_coproc,
             budget_municipality, phi_max, phi_wh,
             # Follower parameters
@@ -76,6 +76,7 @@ class InstanceData:
         self.c_inc = c_inc
         
         self.Q_gw = Q_gw
+        self.Q_gen_total = Q_gen_total
         self.Q_s = Q_s
         self.Q_l = Q_l
         self.Q_i = Q_i

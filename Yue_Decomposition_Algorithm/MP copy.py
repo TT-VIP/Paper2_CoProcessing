@@ -20,51 +20,6 @@ class MasterSolution:
     mu_kiln: float                              # Waste capacity quota for cement kilns
     z_wh: Dict[Tuple[int, int], int]            # Subsidy level choice for waste type w
 
-# Class for storing the KKT optimality cut model components, i.e. all variables and constraints related to the optimality cut for one l in L (for readability and debugging purposes)
-@dataclass
-class KKTOCBlock:
-    """Data class to store variables and constraints related to one KKT optimality cut block for a specific l in L"""
-    l: int  # iteration index (1,2,...)
-    x_ck_fixed: Dict[Tuple[int, int], int]  # discrete follower pattern for this cut from SP1 (SP2 infeasible) or SP2 (SP2 feasible)
-
-    # primal follower continuous vars for this block
-    q_cw: gp.tupledict
-    q_cf: gp.tupledict
-    q_scw: gp.tupledict
-    r_sw: gp.tupledict
-    y_cwh: gp.tupledict
-
-    # dual vars
-    # duals for inequalities (with complementarity binaries)
-    lam_F3: gp.tupledict
-    lam_F4: gp.tupledict
-    lam_F5: gp.tupledict
-    # duals for equalities (without complementarity binaries)
-    nu_F6: gp.Var
-    nu_F7: gp.tupledict
-    nu_F8: gp.tupledict
-    # duals for inequalities (with complementarity binaries) - linearized bilinear terms with discrete variables x_ck (subproblem) and z_wh (master problem)
-    lam_F9_1: gp.tupledict
-    lam_F9_2: gp.tupledict
-    lam_F9_3: gp.tupledict
-    # duals for non-negativity constraints of follower variables (with complementarity binaries)
-    pi_q_cw: gp.tupledict
-    pi_q_cf: gp.tupledict
-    pi_q_scw: gp.tupledict
-    pi_r_sw: gp.tupledict
-    pi_y_cwh: gp.tupledict
-
-    # complementarity binaries (one per inequality)
-    bin_F3: gp.tupledict
-    bin_F4: gp.tupledict
-    bin_F5: gp.tupledict
-    bin_F9_1: gp.tupledict
-    bin_F9_2: gp.tupledict
-    bin_F9_3: gp.tupledict
-
-    # optional: store constraint handles for debugging
-    constr: Dict[str, Any]
-
 # Class for Master Problem (P1 with limited combinations of follower variables)
 class MasterProblem:
     """
@@ -458,10 +413,5 @@ class MasterProblem:
             data.weight_env*(emission_transport + emission_treatment + emission_fuel) +
             data.weight_mon*(cost_transport + cost_treatment + cost_subsidy),
             GRB.MINIMIZE)
-
-    #endregion
-
-    # (later) Method to add Benders cut (after solving SP2)
-    # region Method to add optimality KKT-cut (after solving SP2)
 
     #endregion

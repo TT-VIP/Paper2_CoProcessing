@@ -24,7 +24,7 @@ from gurobipy import GRB
 
 # Import local modules
 from instance_loader import InstanceData
-from master_problem import MasterProblem
+from Yue_Decomposition_Algorithm.gptSolution.master_problem import MasterProblem
 from config import (
     ITERATION_LIMIT, OPTIMALITY_GAP_TOLERANCE, TIME_LIMIT,
     VERBOSE, WRITE_MODELS, OUTPUT_MP

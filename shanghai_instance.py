@@ -55,7 +55,7 @@ class ShanghaiInstance:
 
     # Waste quantities (t/day)
     Q_gw: List[List[int]]       # Q[g][w] Waste quantity at Generation spots
-    T_tot: int                  # Total generated waste (t/day)
+    Q_gen_total: int                  # Total generated waste (t/day)
     Q_s: List[int]              # Q[s] Capacity at Transfer stations
     Q_l: List[int]              # Q[l] Capacity at Landfills
     Q_i: List[int]              # Q[i] Capacity at Incinerators
@@ -87,7 +87,7 @@ class ShanghaiInstance:
     tau: float            # Symmetry breaking parameter for follower problem
 
     # Fix-cost invest-equivalent per capacity (CNY/period)
-    fixcost_invest: List[float]
+    fixcost_invest_k: List[float]
 
 ##########################################
 ############ Data definition ############
@@ -188,7 +188,7 @@ def make_shanghai_instance(seed: int = 7) -> ShanghaiInstance:
         q1 = max(0, g_total - q0)
         Q_gw.append([q0, q1])
 
-    T_tot = sum(Q_gw[g][w] for g in G for w in W)
+    Q_gen_total = sum(Q_gw[g][w] for g in G for w in W)
 
     # Transfer capacity: ensure > inbound per station; keep loose
     # If each district maps mostly to one transfer, set capacity around 700..1100 t/day
@@ -248,7 +248,7 @@ def make_shanghai_instance(seed: int = 7) -> ShanghaiInstance:
     CRF = crf(i_rate, lifetime_years)
     capex_ann = [c_invest_k[k] * CRF for k in K]
     opex_fix_ann = [c_invest_k[k] * 0.06 for k in K]
-    fixcost_invest = [(capex_ann[k] + opex_fix_ann[k]) / 1000 for k in K]
+    fixcost_invest_k = [(capex_ann[k] + opex_fix_ann[k]) / 1000 for k in K]
 
     return ShanghaiInstance(
         G_max=G_max, S_max=S_max, W_max=W_max, I_max=I_max, L_max=L_max, C_max=C_max,
@@ -259,7 +259,7 @@ def make_shanghai_instance(seed: int = 7) -> ShanghaiInstance:
         epsilon_truck=epsilon_truck,
         epsilon_land=epsilon_land, epsilon_inc=epsilon_inc, epsilon_kiln_w=epsilon_kiln_w, epsilon_kiln_f=epsilon_kiln_f,
         c_truck=c_truck, c_land=c_land, c_inc=c_inc,
-        Q_gw=Q_gw, T_tot=T_tot,
+        Q_gw=Q_gw, Q_gen_total=Q_gen_total,
         Q_s=Q_s, Q_l=Q_l, Q_i=Q_i,
         Q_k=Q_k, Q_k_max=Q_k_max,
         weight_env=weight_env, weight_mon=weight_mon,
@@ -272,5 +272,5 @@ def make_shanghai_instance(seed: int = 7) -> ShanghaiInstance:
         c_invest_k=c_invest_k, c_preproc_w=c_preproc_w,
         c_penalty=c_penalty, budget_cem=budget_cem,
         tau=tau,
-        fixcost_invest=fixcost_invest,
+        fixcost_invest_k=fixcost_invest_k,
     )

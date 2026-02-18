@@ -46,6 +46,7 @@ c_land = 55                      # Landfill cost CNY/ton
 c_inc = 120                      # Incineration cost CNY/ton
 
 Q_gw = [[240,110],[180,70],[210,90]]   # Q[g,w] Waste quantity at Generation spots (tons)
+Q_gen_total = sum(Q_gw[g][w] for g in G for w in W)  # Total waste generated (tons)
 Q_s = [550,550]                     # Q[s] Waste capacity at Transfer stations (tons)
 Q_l = [500]                          # Q[l] Waste capacity at Landfills (tons)
 Q_i = [450]                           # Q[i] Waste capacity at Incinerators (tons)
