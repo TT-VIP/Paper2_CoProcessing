@@ -1,0 +1,905 @@
+Yue-KKT Decomposition Algorithm started. Logs will be saved to h:\Dissertation\Shanghai\Paper\Co-Processing waste in cement industry\Paper2_CoProcessing\Yue_Decomposition_Algorithm\solutions\Yue_KKT_Decomp_20260223_1456.log
+Set parameter Username
+Set parameter LicenseID to value 2760969
+Academic license - for non-commercial use only - expires 2027-01-05
+Set parameter OutputFlag to value 1
+
+Master Problem model structure (build):
+
+  → Total created variables: 499
+  → Thereof binary variables: 28
+  → Thereof continuous variables: 471
+  → Total created constraints: 291
+
+
+
+======================================================================
+Iteration 1
+Current bounds: LB = -inf, UB = inf, Gap = inf
+======================================================================
+Set parameter MIPFocus to value 0
+
+------------------------------------------------------------
+Solving Master Problem...
+------------------------------------------------------------
+
+Master Problem model structure:
+
+  → Total variables: 499
+  → Thereof binary variables: 28
+  → Thereof continuous variables: 471
+
+  → Total constraints: 291
+Set parameter TimeLimit to value 300
+Set parameter MIPGap to value 0.05
+Gurobi Optimizer version 13.0.1 build v13.0.1rc0 (win64 - Windows Server 2022.0 (20348.2))
+
+CPU model: AMD EPYC 7513 32-Core Processor, instruction set [SSE2|AVX|AVX2]
+Thread count: 20 physical cores, 20 logical processors, using up to 20 threads
+
+Non-default parameters:
+TimeLimit  300
+MIPGap  0.05
+
+Optimize a model with 291 rows, 499 columns and 2035 nonzeros (Min)
+Model fingerprint: 0x55af7b1d
+Model has 456 linear objective coefficients
+Variable types: 471 continuous, 28 integer (28 binary)
+Coefficient statistics:
+  Matrix range     [1e+00, 2e+05]
+  Objective range  [6e-03, 3e+00]
+  Bounds range     [1e+00, 1e+00]
+  RHS range        [3e-01, 2e+06]
+
+Presolve removed 207 rows and 83 columns
+Presolve time: 0.01s
+Presolved: 84 rows, 416 columns, 1163 nonzeros
+Variable types: 398 continuous, 18 integer (18 binary)
+Found heuristic solution: objective 9107.8717774
+Found heuristic solution: objective 7728.8114185
+
+Root relaxation: interrupted, 65 iterations, 0.00 seconds (0.00 work units)
+
+    Nodes    |    Current Node    |     Objective Bounds      |     Work
+ Expl Unexpl |  Obj  Depth IntInf | Incumbent    BestBd   Gap | It/Node Time
+
+     0     0          -    0      7728.81142 7407.76058  4.15%     -    0s
+
+Explored 1 nodes (65 simplex iterations) in 0.02 seconds (0.00 work units)
+Thread count was 20 (of 20 available processors)
+
+Solution count 2: 7728.81 9107.87 
+
+Optimal solution found (tolerance 5.00e-02)
+Best objective 7.728811418450e+03, best bound 7.407760579632e+03, gap 4.1539%
+Best Master Problem Solution: Objective = 7728.81, Bound = 7407.76
+New LB found. LB updated from -inf to 7407.76
+✓ Master Problem solved optimally.
+Set parameter OutputFlag to value 1
+
+Subproblem 1 model structure:
+
+  → Total created variables: 214
+  → Thereof binary variables: 18
+  → Thereof continuous variables: 196
+  → Total created constraints: 234
+
+Set parameter TimeLimit to value 300
+
+------------------------------------------------------------
+Solving Subproblem 1...
+------------------------------------------------------------
+Gurobi Optimizer version 13.0.1 build v13.0.1rc0 (win64 - Windows Server 2022.0 (20348.2))
+
+CPU model: AMD EPYC 7513 32-Core Processor, instruction set [SSE2|AVX|AVX2]
+Thread count: 20 physical cores, 20 logical processors, using up to 20 threads
+
+Non-default parameters:
+TimeLimit  300
+
+Optimize a model with 234 rows, 214 columns and 650 nonzeros (Min)
+Model fingerprint: 0xf7cbd54d
+Model has 202 linear objective coefficients
+Variable types: 196 continuous, 18 integer (18 binary)
+Coefficient statistics:
+  Matrix range     [1e+00, 2e+05]
+  Objective range  [8e-02, 5e+02]
+  Bounds range     [1e+00, 1e+00]
+  RHS range        [1e+00, 4e+05]
+
+Found heuristic solution: objective 2075648.5410
+Presolve removed 194 rows and 86 columns
+Presolve time: 0.00s
+Presolved: 40 rows, 128 columns, 292 nonzeros
+Found heuristic solution: objective 1984424.2632
+Variable types: 110 continuous, 18 integer (18 binary)
+
+Root relaxation: objective 1.686685e+06, 32 iterations, 0.00 seconds (0.00 work units)
+
+    Nodes    |    Current Node    |     Objective Bounds      |     Work
+ Expl Unexpl |  Obj  Depth IntInf | Incumbent    BestBd   Gap | It/Node Time
+
+     0     0 1686685.36    0    6 1984424.26 1686685.36  15.0%     -    0s
+H    0     0                    1792189.8189 1686685.36  5.89%     -    0s
+H    0     0                    1787044.6197 1686685.36  5.62%     -    0s
+     0     0 1722221.97    0    2 1787044.62 1722221.97  3.63%     -    0s
+H    0     0                    1730541.7647 1724786.73  0.33%     -    0s
+H    0     0                    1730471.2448 1724786.73  0.33%     -    0s
+     0     0          -    0      1730471.24 1730471.22  0.00%     -    0s
+
+Cutting planes:
+  Gomory: 1
+  Implied bound: 3
+  MIR: 5
+  RLT: 1
+
+Explored 1 nodes (46 simplex iterations) in 0.03 seconds (0.00 work units)
+Thread count was 20 (of 20 available processors)
+
+Solution count 6: 1.73047e+06 1.73054e+06 1.78704e+06 ... 2.07565e+06
+
+Optimal solution found (tolerance 1.00e-04)
+Best objective 1.730471244765e+06, best bound 1.730471216341e+06, gap 0.0000%
+✓ Subproblem 1 solved optimally.
+Subproblem 1 Solution: 1730471.24
+Set parameter OutputFlag to value 1
+
+Subproblem 2 model structure:
+
+  → Total created variables: 214
+  → Thereof binary variables: 18
+  → Thereof continuous variables: 196
+  → Total created constraints: 237
+
+Set parameter TimeLimit to value 1800
+
+------------------------------------------------------------
+Solving Subproblem 2...
+------------------------------------------------------------
+Gurobi Optimizer version 13.0.1 build v13.0.1rc0 (win64 - Windows Server 2022.0 (20348.2))
+
+CPU model: AMD EPYC 7513 32-Core Processor, instruction set [SSE2|AVX|AVX2]
+Thread count: 20 physical cores, 20 logical processors, using up to 20 threads
+
+Non-default parameters:
+TimeLimit  1800
+
+Optimize a model with 237 rows, 214 columns and 916 nonzeros (Min)
+Model fingerprint: 0xa7b75553
+Model has 184 linear objective coefficients and an objective constant of 1.6692371219591212e+03
+Variable types: 196 continuous, 18 integer (18 binary)
+Coefficient statistics:
+  Matrix range     [8e-02, 2e+05]
+  Objective range  [1e-01, 3e+00]
+  Bounds range     [1e+00, 1e+00]
+  RHS range        [1e+00, 2e+06]
+
+Presolve removed 183 rows and 74 columns
+Presolve time: 0.00s
+Presolved: 54 rows, 140 columns, 453 nonzeros
+Variable types: 122 continuous, 18 integer (18 binary)
+
+Root relaxation: objective 7.839163e+03, 59 iterations, 0.00 seconds (0.00 work units)
+
+    Nodes    |    Current Node    |     Objective Bounds      |     Work
+ Expl Unexpl |  Obj  Depth IntInf | Incumbent    BestBd   Gap | It/Node Time
+
+     0     0 7839.16256    0    6          - 7839.16256      -     -    0s
+     0     0 8449.09542    0    3          - 8449.09542      -     -    0s
+     0     0 infeasible    0               - infeasible      -     -    0s
+
+Cutting planes:
+  Implied bound: 4
+  MIR: 4
+  RLT: 1
+
+Explored 1 nodes (89 simplex iterations) in 0.03 seconds (0.00 work units)
+Thread count was 20 (of 20 available processors)
+
+Solution count 0
+
+Model is infeasible
+Best objective -, best bound -, gap -
+✗ Subproblem 2 is infeasible.
+Subproblem 2 is infeasible -> Upper bound remains unchanged.
+
+----------------------------------------------------------------------
+End of Iteration 1 Summary:
+  LB = 7407.76, UB = inf, Gap = inf, Cut added from SP1
+----------------------------------------------------------------------
+
+======================================================================
+Iteration 2
+Current bounds: LB = 7407.76, UB = inf, Gap = inf
+======================================================================
+Set parameter MIPFocus to value 0
+
+------------------------------------------------------------
+Solving Master Problem...
+------------------------------------------------------------
+
+Master Problem model structure:
+
+  → Total variables: 1512
+  → Thereof binary variables: 422
+  → Thereof continuous variables: 1090
+
+  → Total constraints: 1503
+Set parameter TimeLimit to value 300
+Set parameter MIPGap to value 0.05
+Gurobi Optimizer version 13.0.1 build v13.0.1rc0 (win64 - Windows Server 2022.0 (20348.2))
+
+CPU model: AMD EPYC 7513 32-Core Processor, instruction set [SSE2|AVX|AVX2]
+Thread count: 20 physical cores, 20 logical processors, using up to 20 threads
+
+Non-default parameters:
+TimeLimit  300
+MIPGap  0.05
+
+Optimize a model with 1503 rows, 1512 columns and 6048 nonzeros (Min)
+Model fingerprint: 0xba7db557
+Model has 456 linear objective coefficients
+Variable types: 1090 continuous, 422 integer (422 binary)
+Coefficient statistics:
+  Matrix range     [8e-02, 1e+10]
+  Objective range  [6e-03, 3e+00]
+  Bounds range     [1e+00, 1e+00]
+  RHS range        [8e-02, 2e+06]
+Warning: Model contains large matrix coefficients
+         Consider reformulating model or setting NumericFocus parameter
+         to avoid numerical issues.
+
+Warning: Completing partial solution with 394 unfixed non-continuous variables out of 422
+MIP start from previous solve produced solution with objective 7728.81 (0.11s)
+MIP start from previous solve produced solution with objective 7728.81 (0.12s)
+Loaded MIP start from previous solve with objective 7728.81
+
+Presolve removed 358 rows and 265 columns
+Presolve time: 0.03s
+Presolved: 1145 rows, 1247 columns, 4677 nonzeros
+Variable types: 967 continuous, 280 integer (280 binary)
+
+Root relaxation: interrupted, 217 iterations, 0.00 seconds (0.00 work units)
+
+    Nodes    |    Current Node    |     Objective Bounds      |     Work
+ Expl Unexpl |  Obj  Depth IntInf | Incumbent    BestBd   Gap | It/Node Time
+
+     0     0          -    0      7728.81142 7408.06318  4.15%     -    0s
+
+Explored 1 nodes (217 simplex iterations) in 0.18 seconds (0.08 work units)
+Thread count was 20 (of 20 available processors)
+
+Solution count 2: 7728.81 7728.81 
+
+Optimal solution found (tolerance 5.00e-02)
+Best objective 7.728811418450e+03, best bound 7.408063179555e+03, gap 4.1500%
+Best Master Problem Solution: Objective = 7728.81, Bound = 7408.06
+New LB found. LB updated from 7407.76 to 7408.06
+[BigM] OC block l=1: dual_hits=48, primal_hits=0
+  - OC1.F9_1[0,0,1]: dual=1e+06 hits M=1e+06
+  - OC1.F9_1[0,0,3]: dual=1e+06 hits M=1e+06
+  - OC1.F9_1[0,1,1]: dual=1e+06 hits M=1e+06
+  - OC1.F9_1[1,0,3]: dual=1e+06 hits M=1e+06
+  - OC1.F9_1[1,0,4]: dual=1e+06 hits M=1e+06
+  - OC1.F9_1[1,1,1]: dual=1e+06 hits M=1e+06
+  - OC1.F9_1[1,1,4]: dual=1e+06 hits M=1e+06
+  - OC1.F9_1[2,0,3]: dual=1e+06 hits M=1e+06
+  - OC1.F9_1[2,0,4]: dual=1e+06 hits M=1e+06
+  - OC1.F9_1[2,1,1]: dual=1e+06 hits M=1e+06
+  - OC1.F9_1[2,1,2]: dual=1e+06 hits M=1e+06
+  - OC1.F9_1[2,1,3]: dual=1e+06 hits M=1e+06
+  - OC1.F9_1[3,0,1]: dual=1e+06 hits M=1e+06
+  - OC1.F9_1[3,0,2]: dual=1e+06 hits M=1e+06
+  - OC1.F9_1[3,0,3]: dual=1e+06 hits M=1e+06
+  - OC1.F9_1[3,0,4]: dual=1e+06 hits M=1e+06
+  - OC1.F9_1[3,1,1]: dual=1e+06 hits M=1e+06
+  - OC1.F9_1[3,1,3]: dual=1e+06 hits M=1e+06
+  - OC1.F9_1[4,1,1]: dual=1e+06 hits M=1e+06
+  - OC1.F9_1[5,0,1]: dual=1e+06 hits M=1e+06
+  - OC1.F9_1[5,0,2]: dual=1e+06 hits M=1e+06
+  - OC1.F9_1[5,0,3]: dual=1e+06 hits M=1e+06
+  - OC1.F9_1[5,1,1]: dual=1e+06 hits M=1e+06
+  - OC1.F9_1[5,1,3]: dual=1e+06 hits M=1e+06
+  - OC1.pi_y_cwh[0,0,1]: dual=1e+06 hits M=1e+06
+  - OC1.pi_y_cwh[0,0,3]: dual=1e+06 hits M=1e+06
+  - OC1.pi_y_cwh[0,1,1]: dual=1e+06 hits M=1e+06
+  - OC1.pi_y_cwh[1,0,3]: dual=1e+06 hits M=1e+06
+  - OC1.pi_y_cwh[1,0,4]: dual=1e+06 hits M=1e+06
+  - OC1.pi_y_cwh[1,1,1]: dual=1e+06 hits M=1e+06
+  - OC1.pi_y_cwh[1,1,4]: dual=1e+06 hits M=1e+06
+  - OC1.pi_y_cwh[2,0,3]: dual=1e+06 hits M=1e+06
+  - OC1.pi_y_cwh[2,0,4]: dual=1e+06 hits M=1e+06
+  - OC1.pi_y_cwh[2,1,1]: dual=1e+06 hits M=1e+06
+  - OC1.pi_y_cwh[2,1,2]: dual=1e+06 hits M=1e+06
+  - OC1.pi_y_cwh[2,1,3]: dual=1e+06 hits M=1e+06
+  - OC1.pi_y_cwh[3,0,1]: dual=1e+06 hits M=1e+06
+  - OC1.pi_y_cwh[3,0,2]: dual=1e+06 hits M=1e+06
+  - OC1.pi_y_cwh[3,0,3]: dual=1e+06 hits M=1e+06
+  - OC1.pi_y_cwh[3,0,4]: dual=1e+06 hits M=1e+06
+  - OC1.pi_y_cwh[3,1,1]: dual=1e+06 hits M=1e+06
+  - OC1.pi_y_cwh[3,1,3]: dual=1e+06 hits M=1e+06
+  - OC1.pi_y_cwh[4,1,1]: dual=1e+06 hits M=1e+06
+  - OC1.pi_y_cwh[5,0,1]: dual=1e+06 hits M=1e+06
+  - OC1.pi_y_cwh[5,0,2]: dual=1e+06 hits M=1e+06
+  - OC1.pi_y_cwh[5,0,3]: dual=1e+06 hits M=1e+06
+  - OC1.pi_y_cwh[5,1,1]: dual=1e+06 hits M=1e+06
+  - OC1.pi_y_cwh[5,1,3]: dual=1e+06 hits M=1e+06
+✓ Master Problem solved optimally.
+Set parameter OutputFlag to value 1
+
+Subproblem 1 model structure:
+
+  → Total created variables: 214
+  → Thereof binary variables: 18
+  → Thereof continuous variables: 196
+  → Total created constraints: 234
+
+Set parameter TimeLimit to value 300
+
+------------------------------------------------------------
+Solving Subproblem 1...
+------------------------------------------------------------
+Gurobi Optimizer version 13.0.1 build v13.0.1rc0 (win64 - Windows Server 2022.0 (20348.2))
+
+CPU model: AMD EPYC 7513 32-Core Processor, instruction set [SSE2|AVX|AVX2]
+Thread count: 20 physical cores, 20 logical processors, using up to 20 threads
+
+Non-default parameters:
+TimeLimit  300
+
+Optimize a model with 234 rows, 214 columns and 650 nonzeros (Min)
+Model fingerprint: 0x9dd221dd
+Model has 202 linear objective coefficients
+Variable types: 196 continuous, 18 integer (18 binary)
+Coefficient statistics:
+  Matrix range     [1e+00, 2e+05]
+  Objective range  [8e-02, 5e+02]
+  Bounds range     [1e+00, 1e+00]
+  RHS range        [1e+00, 4e+05]
+
+Found heuristic solution: objective 2075648.5410
+Presolve removed 194 rows and 86 columns
+Presolve time: 0.00s
+Presolved: 40 rows, 128 columns, 292 nonzeros
+Found heuristic solution: objective 1984424.2632
+Variable types: 110 continuous, 18 integer (18 binary)
+
+Root relaxation: objective 1.686685e+06, 32 iterations, 0.00 seconds (0.00 work units)
+
+    Nodes    |    Current Node    |     Objective Bounds      |     Work
+ Expl Unexpl |  Obj  Depth IntInf | Incumbent    BestBd   Gap | It/Node Time
+
+     0     0 1686685.36    0    6 1984424.26 1686685.36  15.0%     -    0s
+H    0     0                    1792189.8189 1686685.36  5.89%     -    0s
+H    0     0                    1787044.6197 1686685.36  5.62%     -    0s
+     0     0 1722221.97    0    2 1787044.62 1722221.97  3.63%     -    0s
+H    0     0                    1730541.7647 1724786.73  0.33%     -    0s
+H    0     0                    1730471.2448 1724786.73  0.33%     -    0s
+     0     0          -    0      1730471.24 1730471.22  0.00%     -    0s
+
+Cutting planes:
+  Gomory: 1
+  Implied bound: 3
+  MIR: 5
+  RLT: 1
+
+Explored 1 nodes (46 simplex iterations) in 0.03 seconds (0.00 work units)
+Thread count was 20 (of 20 available processors)
+
+Solution count 6: 1.73047e+06 1.73054e+06 1.78704e+06 ... 2.07565e+06
+
+Optimal solution found (tolerance 1.00e-04)
+Best objective 1.730471244765e+06, best bound 1.730471216341e+06, gap 0.0000%
+✓ Subproblem 1 solved optimally.
+Subproblem 1 Solution: 1730471.24
+Set parameter OutputFlag to value 1
+
+Subproblem 2 model structure:
+
+  → Total created variables: 214
+  → Thereof binary variables: 18
+  → Thereof continuous variables: 196
+  → Total created constraints: 237
+
+Set parameter TimeLimit to value 1800
+
+------------------------------------------------------------
+Solving Subproblem 2...
+------------------------------------------------------------
+Gurobi Optimizer version 13.0.1 build v13.0.1rc0 (win64 - Windows Server 2022.0 (20348.2))
+
+CPU model: AMD EPYC 7513 32-Core Processor, instruction set [SSE2|AVX|AVX2]
+Thread count: 20 physical cores, 20 logical processors, using up to 20 threads
+
+Non-default parameters:
+TimeLimit  1800
+
+Optimize a model with 237 rows, 214 columns and 916 nonzeros (Min)
+Model fingerprint: 0xb0a76c79
+Model has 184 linear objective coefficients and an objective constant of 1.6692371219591212e+03
+Variable types: 196 continuous, 18 integer (18 binary)
+Coefficient statistics:
+  Matrix range     [8e-02, 2e+05]
+  Objective range  [1e-01, 3e+00]
+  Bounds range     [1e+00, 1e+00]
+  RHS range        [1e+00, 2e+06]
+
+Presolve removed 183 rows and 74 columns
+Presolve time: 0.00s
+Presolved: 54 rows, 140 columns, 453 nonzeros
+Variable types: 122 continuous, 18 integer (18 binary)
+
+Root relaxation: objective 7.839163e+03, 59 iterations, 0.00 seconds (0.00 work units)
+
+    Nodes    |    Current Node    |     Objective Bounds      |     Work
+ Expl Unexpl |  Obj  Depth IntInf | Incumbent    BestBd   Gap | It/Node Time
+
+     0     0 7839.16256    0    6          - 7839.16256      -     -    0s
+     0     0 8449.09542    0    3          - 8449.09542      -     -    0s
+     0     0 infeasible    0               - infeasible      -     -    0s
+
+Cutting planes:
+  Implied bound: 4
+  MIR: 4
+  RLT: 1
+
+Explored 1 nodes (89 simplex iterations) in 0.04 seconds (0.00 work units)
+Thread count was 20 (of 20 available processors)
+
+Solution count 0
+
+Model is infeasible
+Best objective -, best bound -, gap -
+✗ Subproblem 2 is infeasible.
+Subproblem 2 is infeasible -> Upper bound remains unchanged.
+
+----------------------------------------------------------------------
+End of Iteration 2 Summary:
+  LB = 7408.06, UB = inf, Gap = inf, Cut added from SP1
+----------------------------------------------------------------------
+
+######################################################################
+Finished Yue-KKT Decomposition run.
+Iterations 2
+Final LB = 7408.06
+Final UB = inf
+Final Gap = inf (tolerance Xi = 10)
+No feasible solution found during the decomposition process.
+Yue-KKT Decomposition Algorithm started. Logs will be saved to h:\Dissertation\Shanghai\Paper\Co-Processing waste in cement industry\Paper2_CoProcessing\Yue_Decomposition_Algorithm\solutions\Yue_KKT_Decomp_20260223_1456.log
+Set parameter Username
+Set parameter LicenseID to value 2760969
+Academic license - for non-commercial use only - expires 2027-01-05
+Set parameter OutputFlag to value 1
+
+Master Problem model structure (build):
+
+  → Total created variables: 499
+  → Thereof binary variables: 28
+  → Thereof continuous variables: 471
+  → Total created constraints: 291
+
+
+
+======================================================================
+Iteration 1
+Current bounds: LB = -inf, UB = inf, Gap = inf
+======================================================================
+Set parameter MIPFocus to value 0
+
+------------------------------------------------------------
+Solving Master Problem...
+------------------------------------------------------------
+
+Master Problem model structure:
+
+  → Total variables: 499
+  → Thereof binary variables: 28
+  → Thereof continuous variables: 471
+
+  → Total constraints: 291
+Set parameter TimeLimit to value 300
+Set parameter MIPGap to value 0.05
+Gurobi Optimizer version 13.0.1 build v13.0.1rc0 (win64 - Windows Server 2022.0 (20348.2))
+
+CPU model: AMD EPYC 7513 32-Core Processor, instruction set [SSE2|AVX|AVX2]
+Thread count: 20 physical cores, 20 logical processors, using up to 20 threads
+
+Non-default parameters:
+TimeLimit  300
+MIPGap  0.05
+
+Optimize a model with 291 rows, 499 columns and 2035 nonzeros (Min)
+Model fingerprint: 0x55af7b1d
+Model has 456 linear objective coefficients
+Variable types: 471 continuous, 28 integer (28 binary)
+Coefficient statistics:
+  Matrix range     [1e+00, 2e+05]
+  Objective range  [6e-03, 3e+00]
+  Bounds range     [1e+00, 1e+00]
+  RHS range        [3e-01, 2e+06]
+
+Presolve removed 207 rows and 83 columns
+Presolve time: 0.01s
+Presolved: 84 rows, 416 columns, 1163 nonzeros
+Variable types: 398 continuous, 18 integer (18 binary)
+Found heuristic solution: objective 9107.8717774
+Found heuristic solution: objective 7728.8114185
+
+Root relaxation: interrupted, 65 iterations, 0.00 seconds (0.00 work units)
+
+    Nodes    |    Current Node    |     Objective Bounds      |     Work
+ Expl Unexpl |  Obj  Depth IntInf | Incumbent    BestBd   Gap | It/Node Time
+
+     0     0          -    0      7728.81142 7407.76058  4.15%     -    0s
+
+Explored 1 nodes (65 simplex iterations) in 0.02 seconds (0.00 work units)
+Thread count was 20 (of 20 available processors)
+
+Solution count 2: 7728.81 9107.87 
+
+Optimal solution found (tolerance 5.00e-02)
+Best objective 7.728811418450e+03, best bound 7.407760579632e+03, gap 4.1539%
+Best Master Problem Solution: Objective = 7728.81, Bound = 7407.76
+New LB found. LB updated from -inf to 7407.76
+✓ Master Problem solved optimally.
+Set parameter OutputFlag to value 1
+
+Subproblem 1 model structure:
+
+  → Total created variables: 214
+  → Thereof binary variables: 18
+  → Thereof continuous variables: 196
+  → Total created constraints: 234
+
+Set parameter TimeLimit to value 300
+
+------------------------------------------------------------
+Solving Subproblem 1...
+------------------------------------------------------------
+Gurobi Optimizer version 13.0.1 build v13.0.1rc0 (win64 - Windows Server 2022.0 (20348.2))
+
+CPU model: AMD EPYC 7513 32-Core Processor, instruction set [SSE2|AVX|AVX2]
+Thread count: 20 physical cores, 20 logical processors, using up to 20 threads
+
+Non-default parameters:
+TimeLimit  300
+
+Optimize a model with 234 rows, 214 columns and 650 nonzeros (Min)
+Model fingerprint: 0xf7cbd54d
+Model has 202 linear objective coefficients
+Variable types: 196 continuous, 18 integer (18 binary)
+Coefficient statistics:
+  Matrix range     [1e+00, 2e+05]
+  Objective range  [8e-02, 5e+02]
+  Bounds range     [1e+00, 1e+00]
+  RHS range        [1e+00, 4e+05]
+
+Found heuristic solution: objective 2075648.5410
+Presolve removed 194 rows and 86 columns
+Presolve time: 0.00s
+Presolved: 40 rows, 128 columns, 292 nonzeros
+Found heuristic solution: objective 1984424.2632
+Variable types: 110 continuous, 18 integer (18 binary)
+
+Root relaxation: objective 1.686685e+06, 32 iterations, 0.00 seconds (0.00 work units)
+
+    Nodes    |    Current Node    |     Objective Bounds      |     Work
+ Expl Unexpl |  Obj  Depth IntInf | Incumbent    BestBd   Gap | It/Node Time
+
+     0     0 1686685.36    0    6 1984424.26 1686685.36  15.0%     -    0s
+H    0     0                    1792189.8189 1686685.36  5.89%     -    0s
+H    0     0                    1787044.6197 1686685.36  5.62%     -    0s
+     0     0 1722221.97    0    2 1787044.62 1722221.97  3.63%     -    0s
+H    0     0                    1730541.7647 1724786.73  0.33%     -    0s
+H    0     0                    1730471.2448 1724786.73  0.33%     -    0s
+     0     0          -    0      1730471.24 1730471.22  0.00%     -    0s
+
+Cutting planes:
+  Gomory: 1
+  Implied bound: 3
+  MIR: 5
+  RLT: 1
+
+Explored 1 nodes (46 simplex iterations) in 0.04 seconds (0.00 work units)
+Thread count was 20 (of 20 available processors)
+
+Solution count 6: 1.73047e+06 1.73054e+06 1.78704e+06 ... 2.07565e+06
+
+Optimal solution found (tolerance 1.00e-04)
+Best objective 1.730471244765e+06, best bound 1.730471216341e+06, gap 0.0000%
+✓ Subproblem 1 solved optimally.
+Subproblem 1 Solution: 1730471.24
+Set parameter OutputFlag to value 1
+
+Subproblem 2 model structure:
+
+  → Total created variables: 214
+  → Thereof binary variables: 18
+  → Thereof continuous variables: 196
+  → Total created constraints: 237
+
+Set parameter TimeLimit to value 1800
+
+------------------------------------------------------------
+Solving Subproblem 2...
+------------------------------------------------------------
+Gurobi Optimizer version 13.0.1 build v13.0.1rc0 (win64 - Windows Server 2022.0 (20348.2))
+
+CPU model: AMD EPYC 7513 32-Core Processor, instruction set [SSE2|AVX|AVX2]
+Thread count: 20 physical cores, 20 logical processors, using up to 20 threads
+
+Non-default parameters:
+TimeLimit  1800
+
+Optimize a model with 237 rows, 214 columns and 916 nonzeros (Min)
+Model fingerprint: 0xa7b75553
+Model has 184 linear objective coefficients and an objective constant of 1.6692371219591212e+03
+Variable types: 196 continuous, 18 integer (18 binary)
+Coefficient statistics:
+  Matrix range     [8e-02, 2e+05]
+  Objective range  [1e-01, 3e+00]
+  Bounds range     [1e+00, 1e+00]
+  RHS range        [1e+00, 2e+06]
+
+Presolve removed 183 rows and 74 columns
+Presolve time: 0.00s
+Presolved: 54 rows, 140 columns, 453 nonzeros
+Variable types: 122 continuous, 18 integer (18 binary)
+
+Root relaxation: objective 7.839163e+03, 59 iterations, 0.00 seconds (0.00 work units)
+
+    Nodes    |    Current Node    |     Objective Bounds      |     Work
+ Expl Unexpl |  Obj  Depth IntInf | Incumbent    BestBd   Gap | It/Node Time
+
+     0     0 7839.16256    0    6          - 7839.16256      -     -    0s
+     0     0 8449.09542    0    3          - 8449.09542      -     -    0s
+     0     0 infeasible    0               - infeasible      -     -    0s
+
+Cutting planes:
+  Implied bound: 4
+  MIR: 4
+  RLT: 1
+
+Explored 1 nodes (89 simplex iterations) in 0.03 seconds (0.00 work units)
+Thread count was 20 (of 20 available processors)
+
+Solution count 0
+
+Model is infeasible
+Best objective -, best bound -, gap -
+✗ Subproblem 2 is infeasible.
+Subproblem 2 is infeasible -> Upper bound remains unchanged.
+
+----------------------------------------------------------------------
+End of Iteration 1 Summary:
+  LB = 7407.76, UB = inf, Gap = inf, Cut added from SP1
+----------------------------------------------------------------------
+
+======================================================================
+Iteration 2
+Current bounds: LB = 7407.76, UB = inf, Gap = inf
+======================================================================
+Set parameter MIPFocus to value 0
+
+------------------------------------------------------------
+Solving Master Problem...
+------------------------------------------------------------
+
+Master Problem model structure:
+
+  → Total variables: 1512
+  → Thereof binary variables: 422
+  → Thereof continuous variables: 1090
+
+  → Total constraints: 1503
+Set parameter TimeLimit to value 300
+Set parameter MIPGap to value 0.05
+Gurobi Optimizer version 13.0.1 build v13.0.1rc0 (win64 - Windows Server 2022.0 (20348.2))
+
+CPU model: AMD EPYC 7513 32-Core Processor, instruction set [SSE2|AVX|AVX2]
+Thread count: 20 physical cores, 20 logical processors, using up to 20 threads
+
+Non-default parameters:
+TimeLimit  300
+MIPGap  0.05
+
+Optimize a model with 1503 rows, 1512 columns and 6048 nonzeros (Min)
+Model fingerprint: 0xd9093e1b
+Model has 456 linear objective coefficients
+Variable types: 1090 continuous, 422 integer (422 binary)
+Coefficient statistics:
+  Matrix range     [8e-02, 1e+20]
+  Objective range  [6e-03, 3e+00]
+  Bounds range     [1e+00, 1e+00]
+  RHS range        [8e-02, 2e+06]
+Warning: Model contains large matrix coefficient range
+         Consider reformulating model or setting NumericFocus parameter
+         to avoid numerical issues.
+
+Warning: Completing partial solution with 394 unfixed non-continuous variables out of 422
+Warning: Completing partial solution with 394 unfixed non-continuous variables out of 422
+MIP start from previous solve did not produce a new incumbent solution
+
+Presolve removed 398 rows and 265 columns
+Presolve time: 0.02s
+Presolved: 1105 rows, 1247 columns, 4597 nonzeros
+Variable types: 967 continuous, 280 integer (280 binary)
+Found heuristic solution: objective 14796.679636
+
+Root relaxation: objective 7.413381e+03, 269 iterations, 0.00 seconds (0.00 work units)
+
+    Nodes    |    Current Node    |     Objective Bounds      |     Work
+ Expl Unexpl |  Obj  Depth IntInf | Incumbent    BestBd   Gap | It/Node Time
+
+     0     0 7413.38082    0    7 14796.6796 7413.38082  49.9%     -    0s
+H    0     0                    13132.980193 7413.38082  43.6%     -    0s
+     0     0 7617.64384    0    5 13132.9802 7617.64384  42.0%     -    0s
+H    0     0                    13033.717072 7626.29115  41.5%     -    0s
+H    0     0                    12904.116252 7640.35900  40.8%     -    0s
+     0     0 7644.80681    0    6 12904.1163 7644.80681  40.8%     -    0s
+     0     0 7671.77843    0    5 12904.1163 7671.77843  40.5%     -    0s
+     0     0 7706.10660    0    4 12904.1163 7706.10660  40.3%     -    0s
+*    0     0               0    7708.5482933 7708.54829  0.00%     -    0s
+
+Cutting planes:
+  Gomory: 1
+  Implied bound: 2
+  MIR: 8
+  Flow cover: 1
+  Zero half: 1
+  RLT: 1
+
+Explored 1 nodes (414 simplex iterations) in 0.18 seconds (0.08 work units)
+Thread count was 20 (of 20 available processors)
+
+Solution count 5: 7708.55 12904.1 13033.7 ... 14796.7
+
+Optimal solution found (tolerance 5.00e-02)
+Best objective 7.708548293292e+03, best bound 7.708548293292e+03, gap 0.0000%
+Best Master Problem Solution: Objective = 7708.55, Bound = 7708.55
+New LB found. LB updated from 7407.76 to 7708.55
+[BigM] No big-M caps appear binding at the chosen tolerance.
+✓ Master Problem solved optimally.
+Set parameter OutputFlag to value 1
+
+Subproblem 1 model structure:
+
+  → Total created variables: 214
+  → Thereof binary variables: 18
+  → Thereof continuous variables: 196
+  → Total created constraints: 234
+
+Set parameter TimeLimit to value 300
+
+------------------------------------------------------------
+Solving Subproblem 1...
+------------------------------------------------------------
+Gurobi Optimizer version 13.0.1 build v13.0.1rc0 (win64 - Windows Server 2022.0 (20348.2))
+
+CPU model: AMD EPYC 7513 32-Core Processor, instruction set [SSE2|AVX|AVX2]
+Thread count: 20 physical cores, 20 logical processors, using up to 20 threads
+
+Non-default parameters:
+TimeLimit  300
+
+Optimize a model with 234 rows, 214 columns and 650 nonzeros (Min)
+Model fingerprint: 0x396b8ac8
+Model has 202 linear objective coefficients
+Variable types: 196 continuous, 18 integer (18 binary)
+Coefficient statistics:
+  Matrix range     [1e+00, 2e+05]
+  Objective range  [8e-02, 5e+02]
+  Bounds range     [1e+00, 1e+00]
+  RHS range        [1e+00, 4e+05]
+
+Found heuristic solution: objective 2128687.0909
+Presolve removed 194 rows and 86 columns
+Presolve time: 0.00s
+Presolved: 40 rows, 128 columns, 292 nonzeros
+Found heuristic solution: objective 2032911.2575
+Variable types: 110 continuous, 18 integer (18 binary)
+
+Root relaxation: objective 1.686689e+06, 31 iterations, 0.00 seconds (0.00 work units)
+
+    Nodes    |    Current Node    |     Objective Bounds      |     Work
+ Expl Unexpl |  Obj  Depth IntInf | Incumbent    BestBd   Gap | It/Node Time
+
+     0     0 1686689.17    0    5 2032911.26 1686689.17  17.0%     -    0s
+H    0     0                    1792195.2827 1686689.17  5.89%     -    0s
+H    0     0                    1787050.0835 1686689.17  5.62%     -    0s
+     0     0 1716925.87    0    4 1787050.08 1716925.87  3.92%     -    0s
+     0     0 1719637.73    0    6 1787050.08 1719637.73  3.77%     -    0s
+     0     0 1719789.95    0    6 1787050.08 1719789.95  3.76%     -    0s
+H    0     0                    1772855.1472 1719789.95  2.99%     -    0s
+*    0     0               0    1730480.5640 1730480.56  0.00%     -    0s
+
+Cutting planes:
+  Gomory: 4
+  Cover: 1
+  Implied bound: 4
+  MIR: 6
+
+Explored 1 nodes (54 simplex iterations) in 0.04 seconds (0.00 work units)
+Thread count was 20 (of 20 available processors)
+
+Solution count 6: 1.73048e+06 1.77286e+06 1.78705e+06 ... 2.12869e+06
+
+Optimal solution found (tolerance 1.00e-04)
+Best objective 1.730480564038e+06, best bound 1.730480564038e+06, gap 0.0000%
+✓ Subproblem 1 solved optimally.
+Subproblem 1 Solution: 1730480.56
+Set parameter OutputFlag to value 1
+
+Subproblem 2 model structure:
+
+  → Total created variables: 214
+  → Thereof binary variables: 18
+  → Thereof continuous variables: 196
+  → Total created constraints: 237
+
+Set parameter TimeLimit to value 1800
+
+------------------------------------------------------------
+Solving Subproblem 2...
+------------------------------------------------------------
+Gurobi Optimizer version 13.0.1 build v13.0.1rc0 (win64 - Windows Server 2022.0 (20348.2))
+
+CPU model: AMD EPYC 7513 32-Core Processor, instruction set [SSE2|AVX|AVX2]
+Thread count: 20 physical cores, 20 logical processors, using up to 20 threads
+
+Non-default parameters:
+TimeLimit  1800
+
+Optimize a model with 237 rows, 214 columns and 916 nonzeros (Min)
+Model fingerprint: 0x234a4a9f
+Model has 184 linear objective coefficients and an objective constant of 1.6683883230981942e+03
+Variable types: 196 continuous, 18 integer (18 binary)
+Coefficient statistics:
+  Matrix range     [8e-02, 2e+05]
+  Objective range  [1e-01, 3e+00]
+  Bounds range     [1e+00, 1e+00]
+  RHS range        [1e+00, 2e+06]
+
+Presolve removed 183 rows and 74 columns
+Presolve time: 0.00s
+Presolved: 54 rows, 140 columns, 453 nonzeros
+Variable types: 122 continuous, 18 integer (18 binary)
+
+Root relaxation: objective 7.845858e+03, 59 iterations, 0.00 seconds (0.00 work units)
+
+    Nodes    |    Current Node    |     Objective Bounds      |     Work
+ Expl Unexpl |  Obj  Depth IntInf | Incumbent    BestBd   Gap | It/Node Time
+
+     0     0 7845.85849    0    5          - 7845.85849      -     -    0s
+     0     0 8521.88031    0    2          - 8521.88031      -     -    0s
+     0     0 infeasible    0               - infeasible      -     -    0s
+
+Cutting planes:
+  Gomory: 1
+  Cover: 1
+  Implied bound: 3
+  MIR: 5
+  RLT: 1
+
+Explored 1 nodes (91 simplex iterations) in 0.03 seconds (0.00 work units)
+Thread count was 20 (of 20 available processors)
+
+Solution count 0
+
+Model is infeasible
+Best objective -, best bound -, gap -
+✗ Subproblem 2 is infeasible.
+Subproblem 2 is infeasible -> Upper bound remains unchanged.
+
+----------------------------------------------------------------------
+End of Iteration 2 Summary:
+  LB = 7708.55, UB = inf, Gap = inf, Cut added from SP1
+----------------------------------------------------------------------
+
+######################################################################
+Finished Yue-KKT Decomposition run.
+Iterations 2
+Final LB = 7708.55
+Final UB = inf
+Final Gap = inf (tolerance Xi = 10)
+No feasible solution found during the decomposition process.

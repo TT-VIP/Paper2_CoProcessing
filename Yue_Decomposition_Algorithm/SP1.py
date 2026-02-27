@@ -1,7 +1,8 @@
 import gurobipy as gp
 from gurobipy import GRB
+import logging
 
-from Yue_Decomposition_Algorithm.MP import MasterSolution
+from MP_KKT import MasterSolution
 from instance_loader import InstanceData
 
 from typing import Dict, Tuple
@@ -84,32 +85,35 @@ class SubProblem1:
         self._set_objective()
         self.model.update()
 
-        print("\nSubproblem 1 model structure:\n")
-        print(f"  → Total created variables: {self.model.NumVars}")
-        print(f"  → Thereof binary variables: {self.model.NumBinVars}")
-        print(f"  → Thereof continuous variables: {self.model.NumVars - self.model.NumBinVars}")
+        logging.info("\nSubproblem 1 model structure:\n")
+        logging.info(f"  → Total created variables: {self.model.NumVars}")
+        logging.info(f"  → Thereof binary variables: {self.model.NumBinVars}")
+        logging.info(f"  → Thereof continuous variables: {self.model.NumVars - self.model.NumBinVars}")
 
-        print(f"  → Total created constraints: {self.model.NumConstrs}")
+        logging.info(f"  → Total created constraints: {self.model.NumConstrs}\n")
 
         # self._build = True
 
-    def solve(self) -> None:
+    def solve(self, *, time_limit: int = GRB.INFINITY) -> None:
         assert self.model is not None, "Model is not built yet. Call build() before solve()."
+        self.model.Params.TimeLimit = time_limit
         
         """Solve the Subproblem 1"""
-        print("\n" + "-"*60)
-        print("Solving Subproblem 1...")
-        print("-"*60)
+        logging.info("\n" + "-"*60)
+        logging.info("Solving Subproblem 1...")
+        logging.info("-"*60)
         self.model.optimize()
 
     def extract_solution(self) -> SubProblem1Solution:
         """Extract solution from the Master Problem"""
         if self.model.status == GRB.OPTIMAL:
-            print('✓ Subproblem 1 solved optimally.')
+            logging.info('✓ Subproblem 1 solved optimally.')
         elif self.model.status == GRB.SUBOPTIMAL:
-            print('⚠ Subproblem 1 solved suboptimally.')
+            logging.info('⚠ Subproblem 1 solved suboptimally.')
+        elif self.model.status == GRB.TIME_LIMIT:
+            logging.info('⚠ Subproblem 1 solve time limit reached. Best solution found will be extracted.')
         else:
-            raise RuntimeError("Subproblem 1 is not (sub)optimal; cannot extract solution.")
+            raise RuntimeError("✗ No solution for Subproblem 1 found; cannot extract solution.")
         
         data = self.instance
 

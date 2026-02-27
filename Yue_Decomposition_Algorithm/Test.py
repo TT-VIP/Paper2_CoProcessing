@@ -1,5 +1,5 @@
 from instance_loader import InstanceData
-from MP import MasterProblem
+from MP_KKT import MasterProblem
 from SP1 import SubProblem1
 from SP2 import SubProblem2
 from shanghai_instance import make_shanghai_instance
@@ -33,6 +33,18 @@ def main() -> None:
         print(sp2_sol)
     else:
         print("Subproblem 2 is infeasible -> generate feasibility cut for MP")
+
+    if sp2_sol.feasible:
+        mp._add_kkt_oc_block(sp2_sol.x_ck)
+        mp.solve()
+        mp_sol = mp.extract_solution()
+        print(mp_sol)
+    else:
+        mp._add_kkt_oc_block(sp1_sol.x_ck)
+        mp.solve()
+        mp_sol = mp.extract_solution()
+        print(mp_sol)
+    
 
 
 if __name__ == "__main__":

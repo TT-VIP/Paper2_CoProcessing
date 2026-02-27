@@ -100,7 +100,7 @@ def crf(i: float, n: int) -> float:
     return (i * (1 + i) ** n) / ((1 + i) ** n - 1)
 
 
-def make_shanghai_instance(seed: int = 7) -> ShanghaiInstance:
+def make_shanghai_instance_scaled(seed: int = 7) -> ShanghaiInstance:
     rng = random.Random(seed)
 
     # -----------------------------
@@ -236,13 +236,13 @@ def make_shanghai_instance(seed: int = 7) -> ShanghaiInstance:
     beta_w = [8.0, 16.0]
 
     # Investment CAPEX by option size (CNY) – extend to K=3
-    c_invest_k = [70_000_000.0, 110_000_000.0, 150_000_000.0]
+    c_invest_k = [70_000.0, 110_000.0, 150_000.0]
 
     # Preprocessing cost by waste type
     c_preproc_w = [150.0, 110.0]
 
     c_penalty = 160.0
-    budget_cem = 350_000_000.0  # bigger portfolio-level budget for 6 plants
+    budget_cem = 350_000.0  # bigger portfolio-level budget for 6 plants
 
     tau = 1e-3
 
@@ -257,7 +257,7 @@ def make_shanghai_instance(seed: int = 7) -> ShanghaiInstance:
     # Big-M value for cut generation
     M_primal = {
         'F3': 10,
-        'F4': max(alpha_c)*kappa_coproc,     # Maximmum energy content in co-processing
+        'F4': max(alpha_c)*kappa_coproc+10,     # Maximmum energy content in co-processing
         'F5': Q_k_max+1,                       # Maximum co-processing quantity
         'F9_1': Q_k_max+1,                      # Maximum co-processing quantity
         'F9_2': Q_k_max+1,                       # Maximum co-processing quantity
@@ -273,14 +273,14 @@ def make_shanghai_instance(seed: int = 7) -> ShanghaiInstance:
         'lam_F3': 10**6,     # Big-M for dual variable of constraint F3 (energy fulfillment constraint)
         'lam_F4': 10**6,     # Big-M for dual variable of constraint F4 (maximum co-processing quantity)
         'lam_F5': 10**10,     # Big-M for dual variable of constraint F5 (co-process capacity limited by investment decision)
-        'lam_F9_1': 10**10,   # Big-M for dual variable of constraint F9_1 (linking co-processing quantity to subsidy level h)
+        'lam_F9_1': 10**20,   # Big-M for dual variable of constraint F9_1 (linking co-processing quantity to subsidy level h)
         'lam_F9_2': 10**10,   # Big-M for dual variable of constraint F9_2 (linking co-processing quantity to subsidy level h)
         'lam_F9_3': 10**6,   # Big-M for dual variable of constraint F9_3 (linking co-processing quantity to subsidy level h)
         'pi_q_cw': 10**8,    # Big-M for dual variable of constraint limiting quantity of waste processed at cement plant
         'pi_q_cf': 10**6,    # Big-M for dual variable of constraint limiting quantity of coal processed at cement plant
         'pi_q_scw': 10**10,   # Big-M for dual variable of constraint limiting quantity of waste allocated from transfer station to cement plant
         'pi_r_sw': 10**10,    # Big-M for dual variable of constraint limiting residual waste at transfer station after allocation
-        'pi_y_cwh': 10**10    # Big-M for dual variable of constraint linking subsidy level to co-processing quantity
+        'pi_y_cwh': 10**20    # Big-M for dual variable of constraint linking subsidy level to co-processing quantity
     }
 
     return ShanghaiInstance(

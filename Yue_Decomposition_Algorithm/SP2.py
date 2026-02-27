@@ -1,7 +1,8 @@
 import gurobipy as gp
 from gurobipy import GRB
+import logging
 
-from Yue_Decomposition_Algorithm.MP import MasterSolution
+from MP_KKT import MasterSolution
 from Yue_Decomposition_Algorithm.SP1 import SubProblem1Solution
 from instance_loader import InstanceData
 
@@ -12,7 +13,7 @@ from dataclasses import dataclass
 class SubProblem2Solution:
     '''Data class to hold Subproblem 2 solution'''
     feasible: bool                                     # Indicates if SP2 is feasible (followers' reaction from SP1 is feasible for the given leader decisions)
-    sp2_obj: float | None                              # Objective value of SP2
+    sp2_obj: float | None                              # Objective value of SP2 (equals objective of leader)
     x_ck: Dict[Tuple[int, int], float] | None          # Investment decision of capacity k for cement plant c
     q_cw: Dict[Tuple[int, int], float] | None          # Quantity of waste w processed at cement plant c
     q_cf: Dict[Tuple[int, int], float] | None          # Quantity of coal f processed at cement plant c
@@ -81,21 +82,22 @@ class SubProblem2:
         # self.model.setObjective(0.0, GRB.MINIMIZE)  # Objective is zero because we are only checking feasibility of achieving SP1 optimal reaction value with the given leader decisions (SP2 is a feasibility problem)
         self.model.update()
 
-        print("\nSubproblem 2 model structure:\n")
-        print(f"  → Total created variables: {self.model.NumVars}")
-        print(f"  → Thereof binary variables: {self.model.NumBinVars}")
-        print(f"  → Thereof continuous variables: {self.model.NumVars - self.model.NumBinVars}")
+        logging.info("\nSubproblem 2 model structure:\n")
+        logging.info(f"  → Total created variables: {self.model.NumVars}")
+        logging.info(f"  → Thereof binary variables: {self.model.NumBinVars}")
+        logging.info(f"  → Thereof continuous variables: {self.model.NumVars - self.model.NumBinVars}")
 
-        print(f"  → Total created constraints: {self.model.NumConstrs}")
+        logging.info(f"  → Total created constraints: {self.model.NumConstrs}\n")
 
-    def solve(self) -> None:
+    def solve(self, *, time_limit: int = GRB.INFINITY) -> None:
         '''Solve SP2'''
         assert self.model is not None, "Model is not built yet. Call build() before solve()."
+        self.model.Params.TimeLimit = time_limit
 
         """Solve the Subproblem 2"""
-        print("\n" + "-"*60)
-        print("Solving Subproblem 2...")
-        print("-"*60)
+        logging.info("\n" + "-"*60)
+        logging.info("Solving Subproblem 2...")
+        logging.info("-"*60)
         self.model.optimize()
 
     def _set_gurobi_parameters(self) -> None:           # only needed if feasibility problem considered with 0 objective, otherwise not necessary to set special parameters for optimality focus
@@ -107,12 +109,25 @@ class SubProblem2:
     def extract_solution(self) -> None:
         data = self.instance
         is_feasible = self.model.status in [GRB.OPTIMAL, GRB.SUBOPTIMAL]
+        is_time_limit_reached = self.model.status == GRB.TIME_LIMIT
         
         if is_feasible:
             if self.model.status == GRB.OPTIMAL:
-                print('✓ Subproblem 2 solved optimally.')
+                logging.info('✓ Subproblem 2 solved optimally.')
             else:
-                print('⚠ Subproblem 2 solved suboptimally.')
+                logging.info('⚠ Subproblem 2 solved suboptimally.')
+            return SubProblem2Solution(
+                feasible=True,
+                sp2_obj=self.model.ObjVal,
+                x_ck = {(c,k): int(round(self.x_ck[c, k].X)) for c in data.C for k in data.K},       # rounding because of floating-point relaxation within gurobi (0.9999997 or 1.0000002 possible)
+                q_cw = {(c,w): self.q_cw[c, w].X for c in data.C for w in data.W},
+                q_cf = {(c,f): self.q_cf[c, f].X for c in data.C for f in data.F},
+                r_sw = {(s,w): self.r_sw[s, w].X for s in data.S for w in data.W},
+                q_scw = {(s,c,w): self.q_scw[s, c, w].X for s in data.S for c in data.C for w in data.W},
+                y_cwh = {(c,w,h): self.y_cwh[c, w, h].X for c in data.C for w in data.W for h in data.H}
+            )
+        elif is_time_limit_reached and self.model.SolCount > 0:
+            logging.info('⚠ Subproblem 2 solve time limit reached. Best solution found will be extracted.')
             return SubProblem2Solution(
                 feasible=True,
                 sp2_obj=self.model.ObjVal,
@@ -124,6 +139,7 @@ class SubProblem2:
                 y_cwh = {(c,w,h): self.y_cwh[c, w, h].X for c in data.C for w in data.W for h in data.H}
             )
         else:       # alternative: just 'return None' and check in decomposition algorithm 'if: sp2_sol = None'
+            logging.info('✗ Subproblem 2 is infeasible.')
             return SubProblem2Solution(
                 feasible=False,
                 sp2_obj=None,

@@ -30,7 +30,8 @@ class InstanceData:
             # Follower parameters
             price_f, c_invest_k, c_preproc_w, c_penalty, budget_cem,
             alpha_c, beta_f, beta_w, tau,
-            fixcost_invest_k, CRF
+            fixcost_invest_k, CRF,
+            M_primal, M_dual
         )
         
         # ===== SETS =====
@@ -105,6 +106,9 @@ class InstanceData:
         self.tau = tau
         self.fixcost_invest_k = fixcost_invest_k
         self.CRF = CRF
+
+        self.M_primal = M_primal
+        self.M_dual = M_dual
     
     def validate(self):
         """Validate instance data for consistency and feasibility"""
