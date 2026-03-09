@@ -55,18 +55,13 @@ class KKTOCBlock:
     pi_r_sw: gp.tupledict
     pi_y_cwh: gp.tupledict
 
-    # complementarity binaries (one per inequality)
-    bin_F3: gp.tupledict
-    bin_F4: gp.tupledict
-    bin_F5: gp.tupledict
-    bin_F9_1: gp.tupledict
-    bin_F9_2: gp.tupledict
-    bin_F9_3: gp.tupledict
-    bin_q_cw: gp.tupledict
-    bin_q_cf: gp.tupledict
-    bin_q_scw: gp.tupledict
-    bin_r_sw: gp.tupledict
-    bin_y_cwh: gp.tupledict
+    # complementarity slacks (one per inequality)
+    slack_F3: gp.tupledict
+    slack_F4: gp.tupledict
+    slack_F5: gp.tupledict
+    slack_F9_1: gp.tupledict
+    slack_F9_2: gp.tupledict
+    slack_F9_3: gp.tupledict
 
     # optional: store constraint handles for debugging
     constr: Dict[str, Any]
@@ -106,7 +101,6 @@ class MasterProblem:
         # Data containers for KKT optimality cut blocks
         self.kkt_oc_blocks: Dict[int, KKTOCBlock] = {}  # Dictionary to store KKT optimality cut blocks by iteration index l
         self._kkt_oc_counter = 0  # Counter to assign unique indices to KKT optimality cut blocks
-        self.no_good_cut_counter = 0  # Counter to assign unique indices to no-good cuts for duplicate patterns
 
         # Variable Containers (filled in build())
         # Leader
@@ -482,17 +476,18 @@ class MasterProblem:
 
         m.setObjective(
             data.weight_env*(emission_transport + emission_treatment + emission_fuel) +
-            # data.weight_mon*(cost_transport + cost_treatment + cost_subsidy),
-            data.weight_mon*(cost_transport + cost_treatment),
+            data.weight_mon*(cost_transport + cost_treatment + cost_subsidy),
             GRB.MINIMIZE)
 
     #endregion
 
     # (later) Method to add Benders cut (after solving SP2)
-    # region Method add optimality KKT-cut (after solving SP2)
-    def _add_kkt_oc_block(self, x_ck_fixed: Dict[Tuple[int, int], int]) -> int:
+    # region Method add optimality KKT-cut with SOS1 conditions (after solving SP2)
+    def _add_kkt_oc_block_sos1(self, x_ck_fixed: Dict[Tuple[int, int], int]) -> int:
         """
-        Method to add one KKT optimality cut block for iteration l with fixed follower pattern x_ck_fixed (from SP1 or SP2)
+        Method to add one KKT optimality cut block for iteration l with fixed follower pattern x_ck_fixed (from SP1 or SP2),
+        using SOS1 constraints for complementarity instead of Big-M and binaries. Key idea:
+            for each complementarity pair (dual >= 0) ⟂ (slack >= 0), impose SOS1 constraint on (dual, slack) to enforce that at most one of them can be positive, thus enforcing complementarity without big-M.
         - creates variables and constraints for the KKT optimality cut block
         - stores them in a KKTOCBlock dataclass for readability and debugging
         """
@@ -512,33 +507,38 @@ class MasterProblem:
         y_cwh = m.addVars(data.C, data.W, data.H, lb=0.0, vtype=GRB.CONTINUOUS, name=f"{pfx}_y_cwh")
 
         # 2) Dual variables for this cut block
+        # Inequalities
         lam_F3 = m.addVars(data.C, lb=0.0, vtype=GRB.CONTINUOUS, name=f"{pfx}_lam_F3")
         lam_F4 = m.addVars(data.C, lb=0.0, vtype=GRB.CONTINUOUS, name=f"{pfx}_lam_F4")
         lam_F5 = m.addVars(data.C, lb=0.0, vtype=GRB.CONTINUOUS, name=f"{pfx}_lam_F5")
-        nu_F6 = m.addVar(lb=-GRB.INFINITY, vtype=GRB.CONTINUOUS, name=f"{pfx}_nu_F6")
-        nu_F7 = m.addVars(data.C, data.W, lb=-GRB.INFINITY, vtype=GRB.CONTINUOUS, name=f"{pfx}_nu_F7")
-        nu_F8 = m.addVars(data.S, data.W, lb=-GRB.INFINITY, vtype=GRB.CONTINUOUS, name=f"{pfx}_nu_F8")
         lam_F9_1 = m.addVars(data.C, data.W, data.H, lb=0.0, vtype=GRB.CONTINUOUS, name=f"{pfx}_lam_F9_1")
         lam_F9_2 = m.addVars(data.C, data.W, data.H, lb=0.0, vtype=GRB.CONTINUOUS, name=f"{pfx}_lam_F9_2")
         lam_F9_3 = m.addVars(data.C, data.W, data.H, lb=0.0, vtype=GRB.CONTINUOUS, name=f"{pfx}_lam_F9_3")
+        # Equalities
+        nu_F6 = m.addVar(lb=-GRB.INFINITY, vtype=GRB.CONTINUOUS, name=f"{pfx}_nu_F6")
+        nu_F7 = m.addVars(data.C, data.W, lb=-GRB.INFINITY, vtype=GRB.CONTINUOUS, name=f"{pfx}_nu_F7")
+        nu_F8 = m.addVars(data.S, data.W, lb=-GRB.INFINITY, vtype=GRB.CONTINUOUS, name=f"{pfx}_nu_F8")
+        # Non-negativity constraints of follower variables
         pi_q_cw = m.addVars(data.C, data.W, lb=0.0, vtype=GRB.CONTINUOUS, name=f"{pfx}_pi_q_cw")
         pi_q_cf = m.addVars(data.C, data.F, lb=0.0, vtype=GRB.CONTINUOUS, name=f"{pfx}_pi_q_cf")
         pi_q_scw = m.addVars(data.S, data.C, data.W, lb=0.0, vtype=GRB.CONTINUOUS, name=f"{pfx}_pi_q_scw")
         pi_r_sw = m.addVars(data.S, data.W, lb=0.0, vtype=GRB.CONTINUOUS, name=f"{pfx}_pi_r_sw")
         pi_y_cwh = m.addVars(data.C, data.W, data.H, lb=0.0, vtype=GRB.CONTINUOUS, name=f"{pfx}_pi_y_cwh")
 
-        # 3) Complementarity binaries for this cut block
-        bin_F3 = m.addVars(data.C, vtype=GRB.BINARY, name=f"{pfx}_bin_F3")
-        bin_F4 = m.addVars(data.C, vtype=GRB.BINARY, name=f"{pfx}_bin_F4")
-        bin_F5 = m.addVars(data.C, vtype=GRB.BINARY, name=f"{pfx}_bin_F5")
-        bin_F9_1 = m.addVars(data.C, data.W, data.H, vtype=GRB.BINARY, name=f"{pfx}_bin_F9_1")
-        bin_F9_2 = m.addVars(data.C, data.W, data.H, vtype=GRB.BINARY, name=f"{pfx}_bin_F9_2")
-        bin_F9_3 = m.addVars(data.C, data.W, data.H, vtype=GRB.BINARY, name=f"{pfx}_bin_F9_3")
-        bin_q_cw = m.addVars(data.C, data.W, vtype=GRB.BINARY, name=f"{pfx}_bin_q_cw")
-        bin_q_cf = m.addVars(data.C, data.F, vtype=GRB.BINARY, name=f"{pfx}_bin_q_cf")
-        bin_q_scw = m.addVars(data.S, data.C, data.W, vtype=GRB.BINARY, name=f"{pfx}_bin_q_scw")
-        bin_r_sw = m.addVars(data.S, data.W, vtype=GRB.BINARY, name=f"{pfx}_bin_r_sw")
-        bin_y_cwh = m.addVars(data.C, data.W, data.H, vtype=GRB.BINARY, name=f"{pfx}_bin_y_cwh")
+        # 3) Slack variables needed for inequality constraints (SOS1) for this cut block
+        # F3: alpha - sum_f q_cf*beta_f - sum_w q_cw*beta_w <= 0  -> slack_F3 = (sum... - alpha) >= 0
+        slack_F3 = m.addVars(data.C, lb=0.0, vtype=GRB.CONTINUOUS, name=f"{pfx}_slack_F3")
+        # F4: sum_w q_cw*beta_w - kappa*alpha <= 0 -> slack_F4 = (kappa*alpha - sum...) >= 0
+        slack_F4 = m.addVars(data.C, lb=0.0, vtype=GRB.CONTINUOUS, name=f"{pfx}_slack_F4")
+        # F5: sum_w q_cw - sum_k x_fixed*Q_k <= 0 -> slack_F5 = (sum_k x_fixed*Q_k - sum_w q_cw) >= 0
+        slack_F5 = m.addVars(data.C, lb=0.0, vtype=GRB.CONTINUOUS, name=f"{pfx}_slack_F5")
+        # F9.1: y - z*Qmax <= 0 -> slack_F9_1 = (z*Qmax - y) >= 0
+        slack_F9_1 = m.addVars(data.C, data.W, data.H, lb=0.0, vtype=GRB.CONTINUOUS, name=f"{pfx}_slack_F9_1")
+        # F9.2: y - q <= 0 -> slack_F9_2 = (q - y) >= 0
+        slack_F9_2 = m.addVars(data.C, data.W, data.H, lb=0.0, vtype=GRB.CONTINUOUS, name=f"{pfx}_slack_F9_2")
+        # F9.3: q - Qmax*(1-z) - y <= 0 -> slack_F9_3 = (y - q + Qmax*(1-z)) >= 0
+        slack_F9_3 = m.addVars(data.C, data.W, data.H, lb=0.0, vtype=GRB.CONTINUOUS, name=f"{pfx}_slack_F9_3")
+
         #endregion
 
         #region Create constraints for this KKT optimality cut block
@@ -594,17 +594,32 @@ class MasterProblem:
              - gp.quicksum(q_cw[c,w]*data.beta_w[w] for w in data.W) <= 0 for c in data.C),
             name=f"{pfx}_pf1_F3",
         )
+        # Link slack_F3 = sum(...) - alpha  (>=0)
+        m.addConstrs((slack_F3[c] == gp.quicksum(q_cf[c, f] * data.beta_f[f] for f in data.F)
+                + gp.quicksum(q_cw[c, w] * data.beta_w[w] for w in data.W) - data.alpha_c[c] for c in data.C),
+            name=f"{pfx}_slacklink_F3",
+        )
 
         # (pf2) F4 co-processing share: sum_w q_cw*beta_w - kappa*alpha_c <= 0
         m.addConstrs(
             (gp.quicksum(q_cw[c,w]*data.beta_w[w] for w in data.W) - data.kappa_coproc * data.alpha_c[c] <= 0 for c in data.C),
             name=f"{pfx}_pf2_F4",
         )
+        # Link slack_F4 = kappa*alpha - sum(...)
+        m.addConstrs((slack_F4[c] == data.kappa_coproc * data.alpha_c[c]
+                - gp.quicksum(q_cw[c, w] * data.beta_w[w] for w in data.W) for c in data.C),
+            name=f"{pfx}_slacklink_F4",
+        )
 
         # (pf3) F5 capacity with fixed x_ck pattern: sum_w q_cw - sum_k x_ck_fixed*Q_k <= 0
         m.addConstrs(
             (gp.quicksum(q_cw[c,w] for w in data.W) - gp.quicksum(x_ck_fixed[(c, k)]*data.Q_k[k] for k in data.K) <= 0 for c in data.C),
             name=f"{pfx}_pf3_F5",
+        )
+        # Link slack_F5 = sum_k x_fixed*Q_k - sum_w q_cw
+        m.addConstrs((slack_F5[c] == gp.quicksum(x_ck_fixed[(c, k)] * data.Q_k[k] for k in data.K)
+                - gp.quicksum(q_cw[c, w] for w in data.W) for c in data.C),
+            name=f"{pfx}_slacklink_F5",
         )
 
         # (pf4) F6 quota fulfillment (equality): sum_cw q_cw + sum_sw r_sw - mu_kiln*Q_gen_total = 0
@@ -633,11 +648,18 @@ class MasterProblem:
             (y_cwh[c,w,h] - self.z_wh[w,h]*data.Q_k_max <= 0 for c in data.C for w in data.W for h in data.H),
             name=f"{pfx}_pf7_F9_1",
         )
+        m.addConstrs((slack_F9_1[c, w, h] == self.z_wh[w, h] * data.Q_k_max - y_cwh[c, w, h]
+            for c in data.C for w in data.W for h in data.H),
+            name=f"{pfx}_slacklink_F9_1",
+        )
 
         # (pf8) F9.2: y_cwh - q_cw <= 0
         m.addConstrs(
             (y_cwh[c,w,h] - q_cw[c,w] <= 0 for c in data.C for w in data.W for h in data.H),
             name=f"{pfx}_pf8_F9_2",
+        )
+        m.addConstrs((slack_F9_2[c, w, h] == q_cw[c, w] - y_cwh[c, w, h] for c in data.C for w in data.W for h in data.H),
+            name=f"{pfx}_slacklink_F9_2",
         )
 
         # (pf9) F9.3: q_cw - Q_k_max*(1 - z_wh) - y_cwh <= 0
@@ -645,156 +667,57 @@ class MasterProblem:
             (q_cw[c,w] - data.Q_k_max*(1 - self.z_wh[w,h]) - y_cwh[c,w,h] <= 0 for c in data.C for w in data.W for h in data.H),
             name=f"{pfx}_pf9_F9_3",
         )
+        m.addConstrs((slack_F9_3[c, w, h] == y_cwh[c, w, h] - q_cw[c, w] + data.Q_k_max * (1 - self.z_wh[w, h]) for c in data.C for w in data.W for h in data.H),
+            name=f"{pfx}_slacklink_F9_3",
+        )
 
         # non-negativity of primal variables is already defined in variable creation, so no need to add explicitly here
 
         # ======================================================
-        # Complementary slackness constraints (using big-M and binaries)
+        # Complementary slackness constraints (via SOS1)
         # ======================================================
-        # (cs1) lam_F3[c] * b_F3[c] = 0, with b_F3[c] = (sum_f q_cf*beta_f + sum_w q_cw*beta_w - alpha_c) >= 0
-        m.addConstrs(
-            (lam_F3[c] <= data.M_dual["lam_F3"] * bin_F3[c] for c in data.C),
-            name=f"{pfx}_CS1_dual",
-        )
-        m.addConstrs(
-            (
-                gp.quicksum(q_cf[c, f] * data.beta_f[f] for f in data.F)
-                + gp.quicksum(q_cw[c, w] * data.beta_w[w] for w in data.W)
-                - data.alpha_c[c]
-                <= data.M_primal["F3"] * (1 - bin_F3[c])
-                for c in data.C
-            ),
-            name=f"{pfx}_CS1_constr",
-        )
+        
+        # Inequality constraint complementarity:
+        #   lam >= 0  ⟂  slack >= 0
+        # Implement as SOS1([lam, slack])
 
-        # (cs2) lam_F4[c] * b_F4[c] = 0, with b_F4[c] = (kappa*alpha_c - sum_w q_cw*beta_w) >= 0
-        m.addConstrs(
-            (lam_F4[c] <= data.M_dual["lam_F4"] * bin_F4[c] for c in data.C),
-            name=f"{pfx}_CS2_dual",
-        )
-        m.addConstrs(
-            (
-                data.kappa_coproc * data.alpha_c[c]
-                - gp.quicksum(q_cw[c, w] * data.beta_w[w] for w in data.W)
-                <= data.M_primal["F4"] * (1 - bin_F4[c])
-                for c in data.C
-            ),
-            name=f"{pfx}_CS2_constr",
-        )
+        for c in data.C:
+            m.addSOS(GRB.SOS_TYPE1, [lam_F3[c], slack_F3[c]])
+            m.addSOS(GRB.SOS_TYPE1, [lam_F4[c], slack_F4[c]])
+            m.addSOS(GRB.SOS_TYPE1, [lam_F5[c], slack_F5[c]])
 
-        # (cs3) lam_F5[c] * b_F5[c] = 0, with b_F5[c] = (sum_k x_ck_fixed*Q_k - sum_w q_cw) >= 0
-        m.addConstrs(
-            (lam_F5[c] <= data.M_dual["lam_F5"] * bin_F5[c] for c in data.C),
-            name=f"{pfx}_CS3_dual",
-        )
-        m.addConstrs(
-            (
-                gp.quicksum(x_ck_fixed[(c, k)] * data.Q_k[k] for k in data.K)
-                - gp.quicksum(q_cw[c, w] for w in data.W)
-                <= data.M_primal["F5"] * (1 - bin_F5[c])
-                for c in data.C
-            ),
-            name=f"{pfx}_CS3_constr",
-        )
+        for c in data.C:
+            for w in data.W:
+                for h in data.H:
+                    m.addSOS(GRB.SOS_TYPE1, [lam_F9_1[c, w, h], slack_F9_1[c, w, h]])
+                    m.addSOS(GRB.SOS_TYPE1, [lam_F9_2[c, w, h], slack_F9_2[c, w, h]])
+                    m.addSOS(GRB.SOS_TYPE1, [lam_F9_3[c, w, h], slack_F9_3[c, w, h]])
 
-        # (cs4) lam_F9_1[c,w,h] * b_F9_1[c,w,h] = 0, with b = (z_wh*Qmax - y_cwh) >= 0
-        m.addConstrs(
-            (lam_F9_1[c, w, h] <= data.M_dual["lam_F9_1"] * bin_F9_1[c, w, h] for c in data.C for w in data.W for h in data.H),
-            name=f"{pfx}_CS4_dual",
-        )
-        m.addConstrs(
-            (
-                self.z_wh[w, h] * data.Q_k_max - y_cwh[c, w, h]
-                <= data.M_primal["F9_1"] * (1 - bin_F9_1[c, w, h])
-                for c in data.C for w in data.W for h in data.H
-            ),
-            name=f"{pfx}_CS4_constr",
-        )
+        # Bound complementarity (nonnegativity):
+        #   pi >= 0  ⟂  q >= 0
+        # Implement as SOS1([pi, q])
 
-        # (cs5) lam_F9_2[c,w,h] * b_F9_2[c,w,h] = 0, with b = (q_cw - y_cwh) >= 0
-        m.addConstrs(
-            (lam_F9_2[c, w, h] <= data.M_dual["lam_F9_2"] * bin_F9_2[c, w, h] for c in data.C for w in data.W for h in data.H),
-            name=f"{pfx}_CS5_dual",
-        )
-        m.addConstrs(
-            (
-                q_cw[c, w] - y_cwh[c, w, h]
-                <= data.M_primal["F9_2"] * (1 - bin_F9_2[c, w, h])
-                for c in data.C for w in data.W for h in data.H
-            ),
-            name=f"{pfx}_CS5_constr",
-        )
+        for c in data.C:
+            for w in data.W:
+                m.addSOS(GRB.SOS_TYPE1, [pi_q_cw[c, w], q_cw[c, w]])
 
-        # (cs6) lam_F9_3[c,w,h] * b_F9_3[c,w,h] = 0, with b = (y_cwh - q_cw + Qmax*(1-z)) >= 0
-        m.addConstrs(
-            (lam_F9_3[c, w, h] <= data.M_dual["lam_F9_3"] * bin_F9_3[c, w, h] for c in data.C for w in data.W for h in data.H),
-            name=f"{pfx}_CS6_dual",
-        )
-        m.addConstrs(
-            (
-                y_cwh[c, w, h] - q_cw[c, w] + data.Q_k_max * (1 - self.z_wh[w, h])
-                <= data.M_primal["F9_3"] * (1 - bin_F9_3[c, w, h])
-                for c in data.C for w in data.W for h in data.H
-            ),
-            name=f"{pfx}_CS6_constr",
-        )
+        for c in data.C:
+            for f in data.F:
+                m.addSOS(GRB.SOS_TYPE1, [pi_q_cf[c, f], q_cf[c, f]])
+        for s in data.S:
+            for c in data.C:
+                for w in data.W:
+                    m.addSOS(GRB.SOS_TYPE1, [pi_q_scw[s, c, w], q_scw[s, c, w]])
 
-        # ---------------------------------------------------------------------
-        # Bound complementarity (cs7)-(cs11): pi * q = 0 with pi>=0, q>=0
-        # Pattern:
-        #   pi <= M_pi * z
-        #   q  <= M_q  * (1 - z)
-        # ---------------------------------------------------------------------
+        for s in data.S:
+            for w in data.W:
+                m.addSOS(GRB.SOS_TYPE1, [pi_r_sw[s, w], r_sw[s, w]])
 
-        # (cs7) pi_q_cw[c,w] * q_cw[c,w] = 0
-        m.addConstrs(
-            (pi_q_cw[c, w] <= data.M_dual["pi_q_cw"] * bin_q_cw[c, w] for c in data.C for w in data.W),
-            name=f"{pfx}_CS7_dual",
-        )
-        m.addConstrs(
-            (q_cw[c, w] <= data.M_primal["q_cw"] * (1 - bin_q_cw[c, w]) for c in data.C for w in data.W),
-            name=f"{pfx}_CS7_primal",
-        )
+        for c in data.C:
+            for w in data.W:
+                for h in data.H:
+                    m.addSOS(GRB.SOS_TYPE1, [pi_y_cwh[c, w, h], y_cwh[c, w, h]])
 
-        # (cs8) pi_q_cf[c,f] * q_cf[c,f] = 0
-        m.addConstrs(
-            (pi_q_cf[c, f] <= data.M_dual["pi_q_cf"] * bin_q_cf[c, f] for c in data.C for f in data.F),
-            name=f"{pfx}_CS8_dual",
-        )
-        m.addConstrs(
-            (q_cf[c, f] <= data.M_primal["q_cf"] * (1 - bin_q_cf[c, f]) for c in data.C for f in data.F),
-            name=f"{pfx}_CS8_primal",
-        )
-
-        # (cs9) pi_q_scw[s,c,w] * q_scw[s,c,w] = 0
-        m.addConstrs(
-            (pi_q_scw[s, c, w] <= data.M_dual["pi_q_scw"] * bin_q_scw[s, c, w] for s in data.S for c in data.C for w in data.W),
-            name=f"{pfx}_CS9_dual",
-        )
-        m.addConstrs(
-            (q_scw[s, c, w] <= data.M_primal["q_scw"] * (1 - bin_q_scw[s, c, w]) for s in data.S for c in data.C for w in data.W),
-            name=f"{pfx}_CS9_primal",
-        )
-
-        # (cs10) pi_r_sw[s,w] * r_sw[s,w] = 0
-        m.addConstrs(
-            (pi_r_sw[s, w] <= data.M_dual["pi_r_sw"] * bin_r_sw[s, w] for s in data.S for w in data.W),
-            name=f"{pfx}_CS10_dual",
-        )
-        m.addConstrs(
-            (r_sw[s, w] <= data.M_primal["r_sw"] * (1 - bin_r_sw[s, w]) for s in data.S for w in data.W),
-            name=f"{pfx}_CS10_primal",
-        )
-
-        # (cs11) pi_y_cwh[c,w,h] * y_cwh[c,w,h] = 0
-        m.addConstrs(
-            (pi_y_cwh[c, w, h] <= data.M_dual["pi_y_cwh"] * bin_y_cwh[c, w, h] for c in data.C for w in data.W for h in data.H),
-            name=f"{pfx}_CS11_dual",
-        )
-        m.addConstrs(
-            (y_cwh[c, w, h] <= data.M_primal["y_cwh"] * (1 - bin_y_cwh[c, w, h]) for c in data.C for w in data.W for h in data.H),
-            name=f"{pfx}_CS11_primal",
-        )
         
 
         # ======================================================
@@ -849,38 +772,11 @@ class MasterProblem:
             lam_F3=lam_F3, lam_F4=lam_F4, lam_F5=lam_F5, nu_F6=nu_F6, nu_F7=nu_F7, nu_F8=nu_F8,
             lam_F9_1=lam_F9_1, lam_F9_2=lam_F9_2, lam_F9_3=lam_F9_3,
             pi_q_cw=pi_q_cw, pi_q_cf=pi_q_cf, pi_q_scw=pi_q_scw, pi_r_sw=pi_r_sw, pi_y_cwh=pi_y_cwh,
-            bin_F3=bin_F3, bin_F4=bin_F4, bin_F5=bin_F5,
-            bin_F9_1=bin_F9_1, bin_F9_2=bin_F9_2, bin_F9_3=bin_F9_3,
-            bin_q_cw=bin_q_cw, bin_q_cf=bin_q_cf, bin_q_scw=bin_q_scw, bin_r_sw=bin_r_sw, bin_y_cwh=bin_y_cwh,
+            slack_F3=slack_F3, slack_F4=slack_F4, slack_F5=slack_F5, slack_F9_1=slack_F9_1, slack_F9_2=slack_F9_2, slack_F9_3=slack_F9_3,
             constr={}
         )
         self.kkt_oc_blocks[kkt_oc_block.l] = kkt_oc_block
 
         m.update()
         return l
-    #endregion
-
-    #region Method for no-good cut to prevent duplicate follower patterns in future iterations
-    def _add_no_good_cut(self, x_ck_fixed: Dict[Tuple[int, int], int], name_prefix: str = "NoGoodCut") -> None:
-        """
-        Method to add a no-good cut to exclude the given fixed follower pattern x_ck_fixed in future iterations
-        - creates a no-good cut of the form sum_{c,k} (1 - x_ck_fixed)*x_ck + x_ck_fixed*(1-x_ck) >= 1
-        - this ensures that in future iterations, at least one of the x_ck variables must take a different value than in x_ck_fixed
-        """
-        data = self.instance
-        m = self.model
-
-        # Create the no-good cut expression
-        expr = gp.LinExpr()
-        for c in data.C:
-            for k in data.K:
-                if int(round(x_ck_fixed[(c, k)])) == 1:
-                    expr += (1 - self.x_ck0[c, k])  # If fixed value is 1, we want x_ck to be 0 in future
-                else:
-                    expr += self.x_ck0[c, k]  # If fixed value is 0, we want x_ck to be 1 in future
-
-        # Add the no-good cut constraint: expr >= 1
-        self.no_good_cut_counter += 1
-        m.addConstr(expr >= 1, name=f"{name_prefix}_{self.no_good_cut_counter}")
-        m.update()
     #endregion

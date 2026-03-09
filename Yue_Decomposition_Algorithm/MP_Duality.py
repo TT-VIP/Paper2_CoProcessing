@@ -404,7 +404,8 @@ class MasterProblem:
         cost_treatment = (
             data.c_land * gp.quicksum(self.q_slw[s,l,w] for s in data.S for l in data.L for w in data.W) +
             data.c_inc * gp.quicksum(self.q_siw[s,i,w] for s in data.S for i in data.I for w in data.W) +
-            (data.c_inc-data.c_penalty) * gp.quicksum(self.r_sw0[s,w] for s in data.S for w in data.W)
+            # (data.c_inc-data.c_penalty) * gp.quicksum(self.r_sw0[s,w] for s in data.S for w in data.W)
+            data.c_inc * gp.quicksum(self.r_sw0[s,w] for s in data.S for w in data.W)
             # data.c_inc * gp.quicksum(self.r_sw0[s,w] for s in data.S for w in data.W)
         )
 
@@ -415,5 +416,10 @@ class MasterProblem:
             data.weight_env*(emission_transport + emission_treatment + emission_fuel) +
             data.weight_mon*(cost_transport + cost_treatment + cost_subsidy),
             GRB.MINIMIZE)
+
+    #endregion
+
+    #region Method to add optimality duality cut (after solving follower problem)
+    def _add_dualiy_oc_cut
 
     #endregion

@@ -20,6 +20,7 @@ class MasterSolution:
     mu_inc: float                               # Waste capacity quota for incinerators
     mu_kiln: float                              # Waste capacity quota for cement kilns
     z_wh: Dict[Tuple[int, int], int]            # Subsidy level choice for waste type w
+    y_wh: Dict[Tuple[int, int], float]          # Linearization variable for subsidy cost (y_wh[w,h] = q_scw[s,c,w] if z_wh[w,h] = 1, else 0)
 
 # Class for storing the KKT optimality cut model components, i.e. all variables and constraints related to the optimality cut for one l in L (for readability and debugging purposes)
 @dataclass
@@ -29,11 +30,9 @@ class KKTOCBlock:
     x_ck_fixed: Dict[Tuple[int, int], int]  # discrete follower pattern for this cut from SP1 (SP2 infeasible) or SP2 (SP2 feasible)
 
     # primal follower continuous vars for this block
-    q_cw: gp.tupledict
     q_cf: gp.tupledict
     q_scw: gp.tupledict
     r_sw: gp.tupledict
-    y_cwh: gp.tupledict
 
     # dual vars
     # duals for inequalities (with complementarity binaries)
@@ -43,30 +42,18 @@ class KKTOCBlock:
     # duals for equalities (without complementarity binaries)
     nu_F6: gp.Var
     nu_F7: gp.tupledict
-    nu_F8: gp.tupledict
-    # duals for inequalities (with complementarity binaries) - linearized bilinear terms with discrete variables x_ck (subproblem) and z_wh (master problem)
-    lam_F9_1: gp.tupledict
-    lam_F9_2: gp.tupledict
-    lam_F9_3: gp.tupledict
     # duals for non-negativity constraints of follower variables (with complementarity binaries)
-    pi_q_cw: gp.tupledict
     pi_q_cf: gp.tupledict
     pi_q_scw: gp.tupledict
     pi_r_sw: gp.tupledict
-    pi_y_cwh: gp.tupledict
 
     # complementarity binaries (one per inequality)
     bin_F3: gp.tupledict
     bin_F4: gp.tupledict
     bin_F5: gp.tupledict
-    bin_F9_1: gp.tupledict
-    bin_F9_2: gp.tupledict
-    bin_F9_3: gp.tupledict
-    bin_q_cw: gp.tupledict
     bin_q_cf: gp.tupledict
     bin_q_scw: gp.tupledict
     bin_r_sw: gp.tupledict
-    bin_y_cwh: gp.tupledict
 
     # optional: store constraint handles for debugging
     constr: Dict[str, Any]
@@ -89,6 +76,7 @@ class MasterProblem:
     - µ_inc: Continuous variable indicating waste capacity quota allocated to incinerators
     - µ_kiln: Continuous variable indicating waste capacity quota allocated to cement kilns
     - z_wh: Binary variable for choice of discrete subsidy level "h" for waste type "w"
+    - y_wh: Continuous variable for linearization of subsidy cost
     - theta_stern: Auxiliary variable for profit function approximation (cut generation)    -> not necessary to define within MP (= solution of MP and no decision variable), but can be helpful for readability and debugging (instead of using a dictionary with keys like "theta_stern_0", "theta_stern_1" etc. for multiple cuts)
 
     - q_scw: Flow from transfer station "s" to cement facility "c" for waste type "w" (decided in upper or lower level?!)
@@ -117,26 +105,14 @@ class MasterProblem:
         self.mu_inc = None
         self.mu_kiln = None
         self.z_wh = None
+        self.y_wh = None
 
         # Dummy Follower variables
         self.x_ck0 = None
-        self.q_cw0 = None
         self.r_sw0 = None
         self.q_cf0 = None
-        self.y_cwh0 = None
         self.q_scw0 = None
-
-
-    # (2) Setup model direcctly when initializing an object of the class
-        # in this case, an object represents a model; model is always alive
-        # - init creates model object
-        # - build() only populates it, i.e. adds variables, constraints, objective, updates it
-    '''
-    def __init__(self, instance: InstanceData, *, name: str = "MP", output_flag: int = 1):
-        self.instance = instance
-        self.model = gp.Model(name)
-        self.model.setParam('OutputFlag', output_flag)
-    '''
+        self.y_wh_KKT = None
     #endregion
 
     # =============================================================================
@@ -239,6 +215,11 @@ class MasterProblem:
                 (w, h): int(round(self.z_wh[w, h].X))       # rounding because of floating-point relaxation within gurobi (0.9999997 or 1.0000002 possible)
                 for w in data.W
                 for h in data.H
+            },
+            y_wh={
+                (w, h): self.y_wh[w, h].X
+                for w in data.W
+                for h in data.H
             }
         )
     #endregion
@@ -260,14 +241,14 @@ class MasterProblem:
         self.mu_inc = m.addVar(lb=0.0, vtype=GRB.CONTINUOUS, name="mu_inc")
         self.mu_kiln = m.addVar(lb=0.0, vtype=GRB.CONTINUOUS, name="mu_kiln")
         self.z_wh = m.addVars(data.W, data.H, vtype=GRB.BINARY, name="z_wh")
+        self.y_wh = m.addVars(data.W, data.H, lb=0.0, vtype=GRB.CONTINUOUS, name="y_wh")
 
         # ===== DUMMY FOLLOWER VARIABLES (FOR CUT GENERATION) =====
         self.x_ck0 = m.addVars(data.C, data.K, vtype=GRB.BINARY, name="x_ck0")
-        self.q_cw0 = m.addVars(data.C, data.W, lb=0.0, vtype=GRB.CONTINUOUS, name="q_cw0")
         self.r_sw0 = m.addVars(data.S, data.W, lb=0.0, vtype=GRB.CONTINUOUS, name="r_sw0")
         self.q_cf0 = m.addVars(data.C, data.F, lb=0.0, vtype=GRB.CONTINUOUS, name="q_cf0")
-        self.y_cwh0 = m.addVars(data.C, data.W, data.H, lb=0.0, vtype=GRB.CONTINUOUS, name="y_cwh0")
         self.q_scw0 = m.addVars(data.S, data.C, data.W, lb=0.0, vtype=GRB.CONTINUOUS, name="q_scw0")
+        self.y_wh_KKT = m.addVars(data.W, data.H, lb=0.0, vtype=GRB.CONTINUOUS, name="y_wh_KKT")
 
     #endregion
 
@@ -343,13 +324,13 @@ class MasterProblem:
         # Coupling constraint:
         # (L10) Total subsidy cost cannot exceed municipality budget
         m.addConstr(
-            gp.quicksum(data.phi_wh[w][h] * self.y_cwh0[c,w,h] for c in data.C for w in data.W for h in data.H) <= data.budget_municipality,
+            gp.quicksum(data.phi_wh[w][h] * self.y_wh[w,h] for w in data.W for h in data.H) <= data.budget_municipality,
         name="L10_municipalityBudget"
         )
         
         # (L11) Quotas must sum to 1
         m.addConstr(
-            self.mu_land +self.mu_inc + self.mu_kiln == 1,
+            self.mu_land + self.mu_inc + self.mu_kiln == 1,
         name="L11_quotaBalance"
         )
 
@@ -357,6 +338,12 @@ class MasterProblem:
         m.addConstr(
             self.mu_land <= data.kappa_land,
         name="L12_landfillQuotaLimit"
+        )
+
+        # Linearization constraints for subsidy cost (y_wh[w,h] = q_scw[s,c,w] if z_wh[w,h] = 1, else 0) via McCormick envelopes
+        # (L13)
+        m.addConstrs(
+            (self.y_wh[w,h] <=)
         )
         #endregion
 

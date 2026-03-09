@@ -1,0 +1,651 @@
+Yue-KKT Decomposition Algorithm started. Logs will be saved to h:\Dissertation\Shanghai\Paper\Co-Processing waste in cement industry\Paper2_CoProcessing\Yue_Decomposition_Algorithm\solutions\Yue_KKT_Decomp_20260303_1815.log
+Set parameter Username
+Set parameter LicenseID to value 2760969
+Academic license - for non-commercial use only - expires 2027-01-05
+Set parameter OutputFlag to value 1
+
+Master Problem model structure (build):
+
+  → Total created variables: 499
+  → Thereof binary variables: 28
+  → Thereof continuous variables: 471
+  → Total created constraints: 291
+
+
+
+======================================================================
+Iteration 1
+Current bounds: LB = -inf, UB = inf, Gap = inf
+======================================================================
+Set parameter MIPFocus to value 0
+
+------------------------------------------------------------
+Solving Master Problem...
+------------------------------------------------------------
+
+Master Problem model structure:
+
+  → Total variables: 499
+  → Thereof binary variables: 28
+  → Thereof continuous variables: 471
+
+  → Total constraints: 291
+Set parameter TimeLimit to value 300
+Set parameter ScaleFlag to value 2
+Set parameter FeasibilityTol to value 1e-06
+Set parameter OptimalityTol to value 1e-06
+Set parameter IntFeasTol to value 1e-06
+Gurobi Optimizer version 13.0.1 build v13.0.1rc0 (win64 - Windows Server 2022.0 (20348.2))
+
+CPU model: AMD EPYC 7513 32-Core Processor, instruction set [SSE2|AVX|AVX2]
+Thread count: 20 physical cores, 20 logical processors, using up to 20 threads
+
+Non-default parameters:
+TimeLimit  300
+IntFeasTol  1e-06
+ScaleFlag  2
+
+Optimize a model with 291 rows, 499 columns and 2035 nonzeros (Min)
+Model fingerprint: 0x55af7b1d
+Model has 456 linear objective coefficients
+Variable types: 471 continuous, 28 integer (28 binary)
+Coefficient statistics:
+  Matrix range     [1e+00, 2e+05]
+  Objective range  [6e-03, 3e+00]
+  Bounds range     [1e+00, 1e+00]
+  RHS range        [3e-01, 2e+06]
+
+Presolve removed 207 rows and 83 columns
+Presolve time: 0.00s
+Presolved: 84 rows, 416 columns, 1163 nonzeros
+Variable types: 398 continuous, 18 integer (18 binary)
+Found heuristic solution: objective 9107.8717774
+Found heuristic solution: objective 7728.8114185
+
+Root relaxation: objective 7.413381e+03, 83 iterations, 0.00 seconds (0.00 work units)
+
+    Nodes    |    Current Node    |     Objective Bounds      |     Work
+ Expl Unexpl |  Obj  Depth IntInf | Incumbent    BestBd   Gap | It/Node Time
+
+     0     0 7413.38082    0    6 7728.81142 7413.38082  4.08%     -    0s
+     0     0 7677.23976    0    4 7728.81142 7677.23976  0.67%     -    0s
+     0     0 7702.80770    0    3 7728.81142 7702.80770  0.34%     -    0s
+H    0     0                    7708.5482933 7702.80770  0.07%     -    0s
+     0     0          -    0      7708.54829 7707.89706  0.01%     -    0s
+
+Cutting planes:
+  Gomory: 3
+  Cover: 2
+  Implied bound: 3
+  MIR: 6
+  RLT: 1
+
+Explored 1 nodes (119 simplex iterations) in 0.05 seconds (0.01 work units)
+Thread count was 20 (of 20 available processors)
+
+Solution count 3: 7708.55 7728.81 9107.87 
+
+Optimal solution found (tolerance 1.00e-04)
+Best objective 7.708548293292e+03, best bound 7.707897058413e+03, gap 0.0084%
+Best Master Problem Solution: Objective = 7708.55, Bound = 7707.90
+New LB found. LB updated from -inf to 7707.90
+✓ Master Problem solved optimally.
+Set parameter OutputFlag to value 1
+
+Subproblem 1 model structure:
+
+  → Total created variables: 214
+  → Thereof binary variables: 18
+  → Thereof continuous variables: 196
+  → Total created constraints: 234
+
+Set parameter TimeLimit to value 300
+
+------------------------------------------------------------
+Solving Subproblem 1...
+------------------------------------------------------------
+Gurobi Optimizer version 13.0.1 build v13.0.1rc0 (win64 - Windows Server 2022.0 (20348.2))
+
+CPU model: AMD EPYC 7513 32-Core Processor, instruction set [SSE2|AVX|AVX2]
+Thread count: 20 physical cores, 20 logical processors, using up to 20 threads
+
+Non-default parameters:
+TimeLimit  300
+
+Optimize a model with 234 rows, 214 columns and 650 nonzeros (Min)
+Model fingerprint: 0x5b0157d3
+Model has 202 linear objective coefficients
+Variable types: 196 continuous, 18 integer (18 binary)
+Coefficient statistics:
+  Matrix range     [1e+00, 2e+05]
+  Objective range  [8e-02, 5e+02]
+  Bounds range     [1e+00, 1e+00]
+  RHS range        [1e+00, 4e+05]
+
+Found heuristic solution: objective 2049881.7792
+Presolve removed 193 rows and 79 columns
+Presolve time: 0.00s
+Presolved: 41 rows, 135 columns, 306 nonzeros
+Found heuristic solution: objective 1960641.0196
+Variable types: 117 continuous, 18 integer (18 binary)
+
+Root relaxation: objective 1.686687e+06, 34 iterations, 0.00 seconds (0.00 work units)
+
+    Nodes    |    Current Node    |     Objective Bounds      |     Work
+ Expl Unexpl |  Obj  Depth IntInf | Incumbent    BestBd   Gap | It/Node Time
+
+     0     0 1686687.42    0    6 1960641.02 1686687.42  14.0%     -    0s
+H    0     0                    1806078.3160 1686687.42  6.61%     -    0s
+H    0     0                    1792181.7465 1686687.42  5.89%     -    0s
+     0     0 1717506.94    0    6 1792181.75 1717506.94  4.17%     -    0s
+     0     0 1727219.02    0    5 1792181.75 1727219.02  3.62%     -    0s
+H    0     0                    1736836.3702 1728040.27  0.51%     -    0s
+     0     0 1728755.56    0    5 1736836.37 1728755.56  0.47%     -    0s
+H    0     0                    1730541.7647 1730477.12  0.00%     -    0s
+H    0     0                    1730477.1462 1730477.12  0.00%     -    0s
+     0     0          -    0      1730477.15 1730477.12  0.00%     -    0s
+
+Cutting planes:
+  Gomory: 2
+  Cover: 1
+  Implied bound: 7
+  MIR: 5
+  RLT: 1
+
+Explored 1 nodes (60 simplex iterations) in 0.04 seconds (0.00 work units)
+Thread count was 20 (of 20 available processors)
+
+Solution count 7: 1.73048e+06 1.73054e+06 1.73684e+06 ... 2.04988e+06
+
+Optimal solution found (tolerance 1.00e-04)
+Best objective 1.730477146198e+06, best bound 1.730477118062e+06, gap 0.0000%
+✓ Subproblem 1 solved optimally.
+Subproblem 1 Solution: 1730477.15
+Set parameter OutputFlag to value 1
+
+Subproblem 2 model structure:
+
+  → Total created variables: 214
+  → Thereof binary variables: 18
+  → Thereof continuous variables: 196
+  → Total created constraints: 237
+
+Set parameter TimeLimit to value 1800
+
+------------------------------------------------------------
+Solving Subproblem 2...
+------------------------------------------------------------
+Gurobi Optimizer version 13.0.1 build v13.0.1rc0 (win64 - Windows Server 2022.0 (20348.2))
+
+CPU model: AMD EPYC 7513 32-Core Processor, instruction set [SSE2|AVX|AVX2]
+Thread count: 20 physical cores, 20 logical processors, using up to 20 threads
+
+Non-default parameters:
+TimeLimit  1800
+
+Optimize a model with 237 rows, 214 columns and 916 nonzeros (Min)
+Model fingerprint: 0xf317a2c2
+Model has 184 linear objective coefficients and an objective constant of 1.6683883230981914e+03
+Variable types: 196 continuous, 18 integer (18 binary)
+Coefficient statistics:
+  Matrix range     [8e-02, 2e+05]
+  Objective range  [1e-01, 3e+00]
+  Bounds range     [1e+00, 1e+00]
+  RHS range        [1e+00, 2e+06]
+
+Presolve removed 182 rows and 67 columns
+Presolve time: 0.00s
+Presolved: 55 rows, 147 columns, 474 nonzeros
+Variable types: 129 continuous, 18 integer (18 binary)
+
+Root relaxation: objective 7.842376e+03, 59 iterations, 0.00 seconds (0.00 work units)
+
+    Nodes    |    Current Node    |     Objective Bounds      |     Work
+ Expl Unexpl |  Obj  Depth IntInf | Incumbent    BestBd   Gap | It/Node Time
+
+     0     0 7842.37590    0    6          - 7842.37590      -     -    0s
+     0     0 8450.11917    0    4          - 8450.11917      -     -    0s
+     0     0 8579.60716    0    2          - 8579.60716      -     -    0s
+     0     0 infeasible    0               - infeasible      -     -    0s
+
+Cutting planes:
+  Gomory: 1
+  Implied bound: 4
+  MIR: 4
+  RLT: 1
+
+Explored 1 nodes (96 simplex iterations) in 0.03 seconds (0.00 work units)
+Thread count was 20 (of 20 available processors)
+
+Solution count 0
+
+Model is infeasible
+Best objective -, best bound -, gap -
+✗ Subproblem 2 is infeasible.
+Subproblem 2 is infeasible -> Upper bound remains unchanged.
+Yue-KKT Decomposition Algorithm started. Logs will be saved to h:\Dissertation\Shanghai\Paper\Co-Processing waste in cement industry\Paper2_CoProcessing\Yue_Decomposition_Algorithm\solutions\Yue_KKT_Decomp_20260303_1815.log
+Set parameter Username
+Set parameter LicenseID to value 2760969
+Academic license - for non-commercial use only - expires 2027-01-05
+Set parameter OutputFlag to value 1
+
+Master Problem model structure (build):
+
+  → Total created variables: 499
+  → Thereof binary variables: 28
+  → Thereof continuous variables: 471
+  → Total created constraints: 291
+
+
+
+======================================================================
+Iteration 1
+Current bounds: LB = -inf, UB = inf, Gap = inf
+======================================================================
+Set parameter MIPFocus to value 0
+
+------------------------------------------------------------
+Solving Master Problem...
+------------------------------------------------------------
+
+Master Problem model structure:
+
+  → Total variables: 499
+  → Thereof binary variables: 28
+  → Thereof continuous variables: 471
+
+  → Total constraints: 291
+Set parameter TimeLimit to value 300
+Set parameter ScaleFlag to value 2
+Set parameter FeasibilityTol to value 1e-06
+Set parameter OptimalityTol to value 1e-06
+Set parameter IntFeasTol to value 1e-06
+Gurobi Optimizer version 13.0.1 build v13.0.1rc0 (win64 - Windows Server 2022.0 (20348.2))
+
+CPU model: AMD EPYC 7513 32-Core Processor, instruction set [SSE2|AVX|AVX2]
+Thread count: 20 physical cores, 20 logical processors, using up to 20 threads
+
+Non-default parameters:
+TimeLimit  300
+IntFeasTol  1e-06
+ScaleFlag  2
+
+Optimize a model with 291 rows, 499 columns and 2035 nonzeros (Min)
+Model fingerprint: 0x55af7b1d
+Model has 456 linear objective coefficients
+Variable types: 471 continuous, 28 integer (28 binary)
+Coefficient statistics:
+  Matrix range     [1e+00, 2e+05]
+  Objective range  [6e-03, 3e+00]
+  Bounds range     [1e+00, 1e+00]
+  RHS range        [3e-01, 2e+06]
+
+Presolve removed 207 rows and 83 columns
+Presolve time: 0.00s
+Presolved: 84 rows, 416 columns, 1163 nonzeros
+Variable types: 398 continuous, 18 integer (18 binary)
+Found heuristic solution: objective 9107.8717774
+Found heuristic solution: objective 7728.8114185
+
+Root relaxation: objective 7.413381e+03, 83 iterations, 0.00 seconds (0.00 work units)
+
+    Nodes    |    Current Node    |     Objective Bounds      |     Work
+ Expl Unexpl |  Obj  Depth IntInf | Incumbent    BestBd   Gap | It/Node Time
+
+     0     0 7413.38082    0    6 7728.81142 7413.38082  4.08%     -    0s
+     0     0 7677.23976    0    4 7728.81142 7677.23976  0.67%     -    0s
+     0     0 7702.80770    0    3 7728.81142 7702.80770  0.34%     -    0s
+H    0     0                    7708.5482933 7702.80770  0.07%     -    0s
+     0     0          -    0      7708.54829 7707.89706  0.01%     -    0s
+
+Cutting planes:
+  Gomory: 3
+  Cover: 2
+  Implied bound: 3
+  MIR: 6
+  RLT: 1
+
+Explored 1 nodes (119 simplex iterations) in 0.07 seconds (0.01 work units)
+Thread count was 20 (of 20 available processors)
+
+Solution count 3: 7708.55 7728.81 9107.87 
+
+Optimal solution found (tolerance 1.00e-04)
+Best objective 7.708548293292e+03, best bound 7.707897058413e+03, gap 0.0084%
+Best Master Problem Solution: Objective = 7708.55, Bound = 7707.90
+New LB found. LB updated from -inf to 7707.90
+✓ Master Problem solved optimally.
+Set parameter OutputFlag to value 1
+
+Subproblem 1 model structure:
+
+  → Total created variables: 214
+  → Thereof binary variables: 18
+  → Thereof continuous variables: 196
+  → Total created constraints: 234
+
+Set parameter TimeLimit to value 300
+
+------------------------------------------------------------
+Solving Subproblem 1...
+------------------------------------------------------------
+Gurobi Optimizer version 13.0.1 build v13.0.1rc0 (win64 - Windows Server 2022.0 (20348.2))
+
+CPU model: AMD EPYC 7513 32-Core Processor, instruction set [SSE2|AVX|AVX2]
+Thread count: 20 physical cores, 20 logical processors, using up to 20 threads
+
+Non-default parameters:
+TimeLimit  300
+
+Optimize a model with 234 rows, 214 columns and 650 nonzeros (Min)
+Model fingerprint: 0x5b0157d3
+Model has 202 linear objective coefficients
+Variable types: 196 continuous, 18 integer (18 binary)
+Coefficient statistics:
+  Matrix range     [1e+00, 2e+05]
+  Objective range  [8e-02, 5e+02]
+  Bounds range     [1e+00, 1e+00]
+  RHS range        [1e+00, 4e+05]
+
+Found heuristic solution: objective 2049881.7792
+Presolve removed 193 rows and 79 columns
+Presolve time: 0.00s
+Presolved: 41 rows, 135 columns, 306 nonzeros
+Found heuristic solution: objective 1960641.0196
+Variable types: 117 continuous, 18 integer (18 binary)
+
+Root relaxation: objective 1.686687e+06, 34 iterations, 0.00 seconds (0.00 work units)
+
+    Nodes    |    Current Node    |     Objective Bounds      |     Work
+ Expl Unexpl |  Obj  Depth IntInf | Incumbent    BestBd   Gap | It/Node Time
+
+     0     0 1686687.42    0    6 1960641.02 1686687.42  14.0%     -    0s
+H    0     0                    1806078.3160 1686687.42  6.61%     -    0s
+H    0     0                    1792181.7465 1686687.42  5.89%     -    0s
+     0     0 1717506.94    0    6 1792181.75 1717506.94  4.17%     -    0s
+     0     0 1727219.02    0    5 1792181.75 1727219.02  3.62%     -    0s
+H    0     0                    1736836.3702 1728040.27  0.51%     -    0s
+     0     0 1728755.56    0    5 1736836.37 1728755.56  0.47%     -    0s
+H    0     0                    1730541.7647 1730477.12  0.00%     -    0s
+H    0     0                    1730477.1462 1730477.12  0.00%     -    0s
+     0     0          -    0      1730477.15 1730477.12  0.00%     -    0s
+
+Cutting planes:
+  Gomory: 2
+  Cover: 1
+  Implied bound: 7
+  MIR: 5
+  RLT: 1
+
+Explored 1 nodes (60 simplex iterations) in 0.05 seconds (0.00 work units)
+Thread count was 20 (of 20 available processors)
+
+Solution count 7: 1.73048e+06 1.73054e+06 1.73684e+06 ... 2.04988e+06
+
+Optimal solution found (tolerance 1.00e-04)
+Best objective 1.730477146198e+06, best bound 1.730477118062e+06, gap 0.0000%
+✓ Subproblem 1 solved optimally.
+Subproblem 1 Solution: 1730477.15
+Set parameter OutputFlag to value 1
+
+Subproblem 2 model structure:
+
+  → Total created variables: 214
+  → Thereof binary variables: 18
+  → Thereof continuous variables: 196
+  → Total created constraints: 237
+
+Set parameter TimeLimit to value 1800
+
+------------------------------------------------------------
+Solving Subproblem 2...
+------------------------------------------------------------
+Gurobi Optimizer version 13.0.1 build v13.0.1rc0 (win64 - Windows Server 2022.0 (20348.2))
+
+CPU model: AMD EPYC 7513 32-Core Processor, instruction set [SSE2|AVX|AVX2]
+Thread count: 20 physical cores, 20 logical processors, using up to 20 threads
+
+Non-default parameters:
+TimeLimit  1800
+
+Optimize a model with 237 rows, 214 columns and 916 nonzeros (Min)
+Model fingerprint: 0xf317a2c2
+Model has 184 linear objective coefficients and an objective constant of 1.6683883230981914e+03
+Variable types: 196 continuous, 18 integer (18 binary)
+Coefficient statistics:
+  Matrix range     [8e-02, 2e+05]
+  Objective range  [1e-01, 3e+00]
+  Bounds range     [1e+00, 1e+00]
+  RHS range        [1e+00, 2e+06]
+
+Presolve removed 182 rows and 67 columns
+Presolve time: 0.00s
+Presolved: 55 rows, 147 columns, 474 nonzeros
+Variable types: 129 continuous, 18 integer (18 binary)
+
+Root relaxation: objective 7.842376e+03, 59 iterations, 0.00 seconds (0.00 work units)
+
+    Nodes    |    Current Node    |     Objective Bounds      |     Work
+ Expl Unexpl |  Obj  Depth IntInf | Incumbent    BestBd   Gap | It/Node Time
+
+     0     0 7842.37590    0    6          - 7842.37590      -     -    0s
+     0     0 8450.11917    0    4          - 8450.11917      -     -    0s
+     0     0 8579.60716    0    2          - 8579.60716      -     -    0s
+     0     0 infeasible    0               - infeasible      -     -    0s
+
+Cutting planes:
+  Gomory: 1
+  Implied bound: 4
+  MIR: 4
+  RLT: 1
+
+Explored 1 nodes (96 simplex iterations) in 0.04 seconds (0.00 work units)
+Thread count was 20 (of 20 available processors)
+
+Solution count 0
+
+Model is infeasible
+Best objective -, best bound -, gap -
+✗ Subproblem 2 is infeasible.
+Subproblem 2 is infeasible -> Upper bound remains unchanged.
+
+----------------------------------------------------------------------
+End of Iteration 1 Summary:
+  LB = 7707.90, UB = inf, Gap = inf, Cut added from SP1
+----------------------------------------------------------------------
+
+======================================================================
+Iteration 2
+Current bounds: LB = 7707.90, UB = inf, Gap = inf
+======================================================================
+Set parameter MIPFocus to value 0
+
+------------------------------------------------------------
+Solving Master Problem...
+------------------------------------------------------------
+
+Master Problem model structure:
+
+  → Total variables: 1512
+  → Thereof binary variables: 422
+  → Thereof continuous variables: 1090
+
+  → Total constraints: 1503
+Set parameter TimeLimit to value 300
+Set parameter ScaleFlag to value 2
+Set parameter FeasibilityTol to value 1e-06
+Set parameter OptimalityTol to value 1e-06
+Set parameter IntFeasTol to value 1e-06
+Gurobi Optimizer version 13.0.1 build v13.0.1rc0 (win64 - Windows Server 2022.0 (20348.2))
+
+CPU model: AMD EPYC 7513 32-Core Processor, instruction set [SSE2|AVX|AVX2]
+Thread count: 20 physical cores, 20 logical processors, using up to 20 threads
+
+Non-default parameters:
+TimeLimit  300
+IntFeasTol  1e-06
+ScaleFlag  2
+
+Optimize a model with 1503 rows, 1512 columns and 6048 nonzeros (Min)
+Model fingerprint: 0xb2d5357c
+Model has 456 linear objective coefficients
+Variable types: 1090 continuous, 422 integer (422 binary)
+Coefficient statistics:
+  Matrix range     [8e-02, 2e+05]
+  Objective range  [6e-03, 3e+00]
+  Bounds range     [1e+00, 1e+00]
+  RHS range        [8e-02, 2e+06]
+
+
+---------------------------------------------------------------------------
+Multi-objectives: starting optimization (min) with 2 objectives... 
+---------------------------------------------------------------------------
+
+Multi-objectives: applying initial presolve...
+---------------------------------------------------------------------------
+
+Presolve removed 159 rows and 87 columns
+Presolve time: 0.01s
+Presolved: 1344 rows, 1425 columns, 5147 nonzeros
+---------------------------------------------------------------------------
+
+Multi-objectives: optimize objective 1 (LeaderObj) ...
+---------------------------------------------------------------------------
+
+Presolve removed 199 rows and 178 columns
+Presolve time: 0.02s
+Presolved: 1145 rows, 1247 columns, 4677 nonzeros
+Variable types: 967 continuous, 280 integer (280 binary)
+Found heuristic solution: objective 14796.679636
+
+Root relaxation: objective 7.413381e+03, 552 iterations, 0.01 seconds (0.01 work units)
+
+    Nodes    |    Current Node    |     Objective Bounds      |     Work
+ Expl Unexpl |  Obj  Depth IntInf | Incumbent    BestBd   Gap | It/Node Time
+
+     0     0 7413.38082    0   19 14796.6796 7413.38082  49.9%     -    0s
+     0     0 7695.03929    0   22 14796.6796 7695.03929  48.0%     -    0s
+     0     0 7703.05834    0   24 14796.6796 7703.05834  47.9%     -    0s
+     0     0 7703.05834    0   18 14796.6796 7703.05834  47.9%     -    0s
+     0     0 7706.98318    0   20 14796.6796 7706.98318  47.9%     -    0s
+     0     0 7708.54829    0   11 14796.6796 7708.54829  47.9%     -    0s
+     0     0 7708.54829    0   31 14796.6796 7708.54829  47.9%     -    0s
+     0     0 7708.54829    0   31 14796.6796 7708.54829  47.9%     -    0s
+     0     0 7708.54829    0   30 14796.6796 7708.54829  47.9%     -    0s
+     0     0 7708.54829    0   36 14796.6796 7708.54829  47.9%     -    0s
+     0     0 7708.54829    0   29 14796.6796 7708.54829  47.9%     -    0s
+     0     0 7708.54829    0   10 14796.6796 7708.54829  47.9%     -    0s
+     0     0 7708.54829    0   13 14796.6796 7708.54829  47.9%     -    0s
+     0     0 7708.54829    0   16 14796.6796 7708.54829  47.9%     -    0s
+     0     0 7708.54829    0   13 14796.6796 7708.54829  47.9%     -    0s
+     0     0 7708.54829    0   24 14796.6796 7708.54829  47.9%     -    0s
+H    0     0                    12069.084704 7708.54829  36.1%     -    0s
+     0     0 7708.54829    0   19 12069.0847 7708.54829  36.1%     -    0s
+     0     0 7708.54829    0   13 12069.0847 7708.54829  36.1%     -    0s
+     0     0 7708.54829    0   13 12069.0847 7708.54829  36.1%     -    0s
+     0     0 7708.54829    0   13 12069.0847 7708.54829  36.1%     -    0s
+     0     2 7708.54829    0   13 12069.0847 7708.54829  36.1%     -    0s
+H   46    50                    10448.469174 7708.54829  26.2%  92.9    0s
+H  359   367                    10365.710102 7708.54829  25.6%  44.2    0s
+H  621   522                    10236.929884 7708.54829  24.7%  49.6    0s
+H  680   604                    10226.051585 7708.54829  24.6%  50.6    0s
+H  688   604                    10217.725585 7708.54829  24.6%  51.3    0s
+H 1079   926                    10200.935193 7708.54829  24.4%  45.7    1s
+H 2125  1506                    10195.149948 7708.54829  24.4%  40.7    1s
+H 2178  1587                    10155.174070 7708.54829  24.1%  40.6    1s
+* 2304  1422              74    9083.0653438 7708.54829  15.1%  40.4    1s
+H 3052  1858                    9047.7798474 7708.54829  14.8%  40.6    1s
+H 3052  1830                    8876.1179729 7708.54829  13.2%  40.6    1s
+H 3052  1748                    8704.4560974 7708.54829  11.4%  40.6    1s
+H 3052  1739                    8677.3345385 7708.54829  11.2%  40.6    1s
+H 3052  1738                    8674.5094034 7708.54829  11.1%  40.6    1s
+H 4127  2062                    8673.1032253 7708.54829  11.1%  44.5    4s
+  5264  2323 7826.48571   33   26 8673.10323 7708.54829  11.1%  44.4    5s
+* 8246  3008              41    8667.5353604 7708.54829  11.1%  46.2    6s
+* 8269  2982              48    8664.7102253 7708.54829  11.0%  46.2    6s
+ 14454  6629 7974.70801   51   13 8664.71023 7708.54829  11.0%  44.8   10s
+*21870  9860              61    8664.7102229 7709.05201  11.0%  43.0   14s
+ 21999 10264 8407.75165   31   12 8664.71022 7709.05201  11.0%  43.0   15s
+H23357 10606                    8664.7102202 7709.16607  11.0%  42.6   16s
+ 25293 11860 infeasible   39      8664.71022 7709.46440  11.0%  42.3   20s
+ 31788 14576 8148.62704   36   36 8664.71022 7710.63523  11.0%  41.3   25s
+H34169 15049                    8664.7102183 7711.57822  11.0%  41.4   27s
+ 36975 16883 8036.55147   36   28 8664.71022 7712.78181  11.0%  41.7   30s
+ 42116 18927 7990.01134   35   32 8664.71022 7713.55940  11.0%  42.2   36s
+ 46337 20479 8241.67537   46   13 8664.71022 7714.36316  11.0%  43.0   43s
+ 46349 20487 7809.87744   35   11 8664.71022 7714.36316  11.0%  43.0   45s
+ 47323 20793     cutoff   39      8664.71022 7714.36316  11.0%  44.2   50s
+ 52532 22266     cutoff   43      8664.71022 7714.36316  11.0%  46.2   55s
+ 58253 23647 8610.05828   41   20 8664.71022 7714.36316  11.0%  47.9   60s
+ 62529 24466 8086.51410   50    8 8664.71022 7714.36316  11.0%  48.8   65s
+ 68311 25813 8057.04650   45   36 8664.71022 7714.36316  11.0%  49.6   71s
+ 72104 26884 7873.32254   46   39 8664.71022 7714.36316  11.0%  50.4   75s
+ 75534 26976 7800.17248   34   80 8664.71022 7714.36316  11.0%  51.6   81s
+ 77303 27780 7819.36081   40   44 8664.71022 7714.36316  11.0%  52.3   85s
+ 82193 28081 7752.09913   50   11 8664.71022 7714.36316  11.0%  53.2   90s
+ 84879 29252 8457.11660   67    9 8664.71022 7714.36316  11.0%  53.5   95s
+ 87491 29710 7729.55957   42   25 8664.71022 7714.36316  11.0%  53.7  102s
+ 89495 30140 7805.97258   42   31 8664.71022 7714.36316  11.0%  53.9  105s
+ 94343 30075 8315.08056   58   24 8664.71022 7714.76957  11.0%  54.4  112s
+ 95082 32705 7845.95043   38   35 8664.71022 7714.81940  11.0%  54.5  120s
+ 101289 31988 8374.88537   53   32 8664.71022 7714.81940  11.0%  55.0  125s
+ 104137 32339 infeasible   47      8664.71022 7716.80158  10.9%  55.2  130s
+ 108918 33431 7924.64479   49   19 8664.71022 7717.04029  10.9%  55.5  138s
+ 110930 33564 7719.50732   43   48 8664.71022 7717.04029  10.9%  55.6  143s
+ 111282 34407     cutoff   43      8664.71022 7717.04029  10.9%  55.7  146s
+ 112846 35685 infeasible   54      8664.71022 7717.04029  10.9%  55.9  150s
+ 117594 37280 7717.83961   38   72 8664.71022 7717.49427  10.9%  56.2  159s
+ 118015 44678 7717.83968   39   72 8664.71022 7717.49427  10.9%  56.2  180s
+ 130704 46339     cutoff   89      8664.71022 7718.13012  10.9%  56.4  187s
+ 133508 47546 7730.83716   55   35 8664.71022 7718.37842  10.9%  56.3  191s
+ 135708 48785 8308.93268   52    8 8664.71022 7718.51981  10.9%  56.4  195s
+ 140171 51131 7860.58575   71   32 8664.71022 7718.95487  10.9%  56.5  203s
+ 142246 52498     cutoff   44      8664.71022 7719.07718  10.9%  56.6  208s
+ 144840 53782 7732.98017   40   46 8664.71022 7719.25267  10.9%  56.7  212s
+ 147112 54778 7736.04150   62   32 8664.71022 7719.40747  10.9%  56.7  216s
+ 149154 55861 7761.25182   69    6 8664.71022 7719.50243  10.9%  56.8  220s
+ 150929 57079 8507.34003   76   12 8664.71022 7719.53286  10.9%  56.9  225s
+ 155208 59242 8334.39982   53   17 8664.71022 7719.54403  10.9%  57.0  234s
+ 157299 60339 8054.94256   60   16 8664.71022 7719.93541  10.9%  57.0  238s
+ 159397 61426 7805.40494   43   54 8664.71022 7720.07352  10.9%  57.0  243s
+ 161557 62717 8465.78353   55   18 8664.71022 7720.15961  10.9%  57.1  248s
+ 163905 63717 7749.47888   51   24 8664.71022 7720.28332  10.9%  57.0  252s
+ 165902 65106 7768.52866   47   13 8664.71022 7720.36031  10.9%  57.1  257s
+ 168347 66316 7969.15289   56   35 8664.71022 7720.45241  10.9%  57.2  262s
+ 170568 67321 7736.59683   45   39 8664.71022 7720.67136  10.9%  57.2  267s
+ 172529 68271 7755.29139   63   61 8664.71022 7720.78664  10.9%  57.3  271s
+ 174569 69407 7758.16142   44   49 8664.71022 7720.93451  10.9%  57.4  275s
+ 176577 70433 7746.41584   40   57 8664.71022 7721.10905  10.9%  57.5  280s
+ 178714 71556 7744.68875   64   37 8664.71022 7721.28315  10.9%  57.6  285s
+ 180840 72652 8329.10034   53   40 8664.71022 7721.46955  10.9%  57.7  290s
+ 182879 73700 7748.22494   50   31 8664.71022 7721.59324  10.9%  57.7  295s
+
+Cutting planes:
+  Learned: 67
+  Gomory: 18
+  Cover: 394
+  Implied bound: 221
+  Projected implied bound: 5
+  Clique: 58
+  MIR: 466
+  Mixing: 1
+  StrongCG: 12
+  Flow cover: 1498
+  Inf proof: 14
+  Zero half: 3
+  RLT: 25
+  Relax-and-lift: 94
+  BQP: 4
+
+Explored 187105 nodes (10826911 simplex iterations) in 300.63 seconds (85.82 work units)
+Thread count was 20 (of 20 available processors)
+
+Solution count 10: 8664.71 8664.71 8664.71 ... 8876.12
+
+Time limit reached
+Best objective 8.664710218308e+03, best bound 7.721945644249e+03, gap 10.8805%
+
+---------------------------------------------------------------------------
+Multi-objectives: stopped in 300.63 seconds (85.82 work units), solution count 9
+Time limit reached
+

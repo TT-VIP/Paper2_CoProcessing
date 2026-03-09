@@ -106,7 +106,7 @@ class MasterProblem:
         # Data containers for KKT optimality cut blocks
         self.kkt_oc_blocks: Dict[int, KKTOCBlock] = {}  # Dictionary to store KKT optimality cut blocks by iteration index l
         self._kkt_oc_counter = 0  # Counter to assign unique indices to KKT optimality cut blocks
-        self.no_good_cut_counter = 0  # Counter to assign unique indices to no-good cuts for duplicate patterns
+        self._kkt_duals = []  # List to store non-negative KKT dual variable values across all OC blocks
 
         # Variable Containers (filled in build())
         # Leader
@@ -483,9 +483,47 @@ class MasterProblem:
         m.setObjective(
             data.weight_env*(emission_transport + emission_treatment + emission_fuel) +
             # data.weight_mon*(cost_transport + cost_treatment + cost_subsidy),
-            data.weight_mon*(cost_transport + cost_treatment),
+            data.weight_mon*(cost_transport + cost_treatment + cost_subsidy),
             GRB.MINIMIZE)
 
+    #endregion
+
+    #region Method to break degeneracy after adding KKT optimality cut via secondary objective (e.g., minimize sum of KKT duals, or sum of complementarity binaries, or a combination of both)
+    def _set_lexicographic_objective_multiobject_hierarchy(self) -> None:
+        """
+        Lexicographic objectives:
+        (1) primary: existing leader objective (already set via _set_objective)
+        (2) secondary: minimize sum of KKT duals to break degeneracy (stabilize)
+        """
+        m = self.model
+
+        # (1) primary objective: existing leader objective (already set via _set_objective)
+        primary = m.getObjective()
+        # IMPORTANT: if you already used setObjective(), calling setObjectiveN is fine.
+        # We set primary as objectiveN index 0 with higher priority.
+        m.setObjectiveN(primary, index=0, priority=2, name="LeaderObj")
+
+        # (2) secondary objective: minimize sum of KKT non-negative duals to break degeneracy (stabilize)
+        # secondary = gp.quicksum(self._kkt_duals)  # sum of all non-negative KKT duals across all OC blocks
+        secondary = gp.quicksum(dual_value for tupledict_obj in self._kkt_duals for dual_value in tupledict_obj.values())
+        m.setObjectiveN(secondary, index=1, priority=1, name="DualStabilization")
+
+    def _set_lexicographic_objective_single_objective(self, weight_primary: float = 1.0, weight_secondary: float = 1e-4) -> None:
+        """
+        Single objective with weighted sum:
+        - primary: existing leader objective (already set via _set_objective)
+        - secondary: minimize sum of KKT duals to break degeneracy (stabilize)
+        """
+        m = self.model
+
+        # (1) primary objective: existing leader objective (already set via _set_objective)
+        primary = m.getObjective()
+
+        # (2) secondary objective: minimize sum of KKT non-negative duals to break degeneracy (stabilize)
+        secondary = gp.quicksum(dual_value for tupledict_obj in self._kkt_duals for dual_value in tupledict_obj.values())
+
+        # Combined single objective with weights
+        m.setObjective(weight_primary * primary + weight_secondary * secondary, GRB.MINIMIZE)
     #endregion
 
     # (later) Method to add Benders cut (after solving SP2)
@@ -526,6 +564,7 @@ class MasterProblem:
         pi_q_scw = m.addVars(data.S, data.C, data.W, lb=0.0, vtype=GRB.CONTINUOUS, name=f"{pfx}_pi_q_scw")
         pi_r_sw = m.addVars(data.S, data.W, lb=0.0, vtype=GRB.CONTINUOUS, name=f"{pfx}_pi_r_sw")
         pi_y_cwh = m.addVars(data.C, data.W, data.H, lb=0.0, vtype=GRB.CONTINUOUS, name=f"{pfx}_pi_y_cwh")
+        self._kkt_duals.extend([lam_F3, lam_F4, lam_F5, lam_F9_1, lam_F9_2, lam_F9_3, pi_q_cw, pi_q_cf, pi_q_scw, pi_r_sw, pi_y_cwh])
 
         # 3) Complementarity binaries for this cut block
         bin_F3 = m.addVars(data.C, vtype=GRB.BINARY, name=f"{pfx}_bin_F3")
@@ -856,6 +895,8 @@ class MasterProblem:
         )
         self.kkt_oc_blocks[kkt_oc_block.l] = kkt_oc_block
 
+        self._set_lexicographic_objective_multiobject_hierarchy()  # update lexicographic objective to include new dual variables for stabilization
+        # self._set_lexicographic_objective_single_objective()  # update single weighted objective to include new dual variables for stabilization
         m.update()
         return l
     #endregion
