@@ -93,6 +93,8 @@ class ShanghaiInstance:
     M_primal: Dict[str, float]
     M_dual: Dict[str, float]
 
+    U_w: List[int]          # Upper bound on waste flow of type w (can be tightened based on data)
+
 ##########################################
 ############ Data definition ############
 ##########################################
@@ -295,6 +297,8 @@ def make_shanghai_instance_scaled(seed: int = 7) -> ShanghaiInstance:
         'pi_y_cwh': 1e4    # Big-M for dual variable of constraint linking subsidy level to co-processing quantity
     }
 
+    U_w = [min(sum(Q_gw[g][w] for g in G), Q_k_max*len(C)) for w in W]  # Upper bound on waste flow of type w (can be tightened based on data)
+
     return ShanghaiInstance(
         G_max=G_max, S_max=S_max, W_max=W_max, I_max=I_max, L_max=L_max, C_max=C_max,
         K_max=K_max, F_max=F_max, H_max=H_max,
@@ -318,5 +322,6 @@ def make_shanghai_instance_scaled(seed: int = 7) -> ShanghaiInstance:
         c_penalty=c_penalty, budget_cem=budget_cem,
         tau=tau,
         fixcost_invest_k=fixcost_invest_k,
-        M_primal=M_primal, M_dual=M_dual
+        M_primal=M_primal, M_dual=M_dual,
+        U_w=U_w
     )

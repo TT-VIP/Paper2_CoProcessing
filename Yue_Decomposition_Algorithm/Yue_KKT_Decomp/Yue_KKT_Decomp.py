@@ -6,8 +6,8 @@ import math
 import gurobipy as gp
 
 from instance_loader import InstanceData
-from MP_KKT_degeneracy import MasterProblem
-# from MP_KKT import MasterProblem
+# from MP_KKT_degeneracy import MasterProblem
+from MP_KKT import MasterProblem
 # from MP_KKT_SOS1 import MasterProblem
 from SP1 import SubProblem1
 from SP2 import SubProblem2
@@ -217,7 +217,7 @@ def main(Verbose: bool = True) -> None:
             mp.model.Params.MIPFocus = 0  # Default focus
             # mp.solve(time_limit=solver_time_limit)
             mp.model.Params.MIPGap = 0.02
-            mp.solve()
+            mp.solve(time_limit=solver_time_limit)
         if mp.model.SolCount == 0:
             logging.info("No solution found for Master Problem. Terminating.")
             break
