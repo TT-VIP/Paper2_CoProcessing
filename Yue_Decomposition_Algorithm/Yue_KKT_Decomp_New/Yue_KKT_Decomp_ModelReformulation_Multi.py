@@ -6,7 +6,7 @@ import math
 import gurobipy as gp
 
 from Instances.instance_loader import InstanceData
-from .MP_KKT_ModelReformulation import MasterProblem
+from .MP_KKT_ModelReformulation_Multi import MasterProblem
 from .SP1_ModelReformulation import SubProblem1
 from .SP2_ModelReformulation import SubProblem2
 # from shanghai_instance import make_shanghai_instance
@@ -146,12 +146,11 @@ def log_nonzero_gurobi_vars(model: gp.Model, model_name: str, tol: float = 1e-4)
         if abs(val) > tol:
             logging.info(f"  {v.VarName} = {val:.10g}")
             count += 1
-    logging.info(f"Total nonzero vars in {model_name}: {count}")
 
 def main(Verbose: bool = True) -> None:
     solver_time_limit = 300     # seconds per solve (MP, SP1, SP2)
     solver_time_limit_sp2 = 1800  # longer time limit for SP2 due to feasibility check necessity
-    Xi = 1e-1                     # termination tolerance (UB - LB <= Xi)
+    Xi = 10                     # termination tolerance (UB - LB <= Xi)
     max_iterations = 3         # maximum number of iterations
     # Verbose = True              # enable detailed output
 
@@ -197,14 +196,24 @@ def main(Verbose: bool = True) -> None:
         
         # LB update
         prev_LB = LB
-        try:
-            new_LB = mp.model.ObjBound  # Update LB with the best bound from MP
-        except Exception:
-            new_LB = mp.model.ObjVal  # Fallback to MP solution objective if bound is not available
+        if mp.model.NumObj > 1:
+            mp.model.params.ObjNumber = 0  # If a second objective exists (e.g. for stabilization), switch to it for bound
+            try:
+                new_LB = mp.model.ObjPassNObjBound  # Update LB with the best bound from MP
+                logging.info(f"Best Master Problem Solution: Objective = {mp.model.ObjPassNObjVal:.2f}, Bound = {mp.model.ObjPassNObjBound:.2f}")
+            except Exception:
+                new_LB = mp.model.ObjPassNObjVal  # Fallback to MP solution objective if bound is not available
+                logging.info(f"Best Master Problem Solution: Objective = {mp.model.ObjPassNObjVal:.2f} (bound not available)")
+        else:
+            try:
+                new_LB = mp.model.ObjBound  # Update LB with the best bound from MP
+                logging.info(f"Best Master Problem Solution: Objective = {mp.model.ObjVal:.2f}, Bound = {mp.model.ObjBound:.2f}")
+            except Exception:
+                new_LB = mp.model.ObjVal  # Fallback to MP solution objective if bound is not available
+                logging.info(f"Best Master Problem Solution: Objective = {mp.model.ObjVal:.2f} (bound not available)")
         LB = max(LB, new_LB)  # Ensure LB does not decrease
         
         # solution logging
-        logging.info(f"Best Master Problem Solution: Objective = {mp.model.ObjVal:.2f}, Bound = {mp.model.ObjBound:.2f}")
         if new_LB > prev_LB:
             logging.info(f"New LB found. LB updated from {prev_LB:.2f} to {new_LB:.2f}")
         else:
@@ -241,13 +250,6 @@ def main(Verbose: bool = True) -> None:
             else:
                 logging.info(f"Subproblem 2 feasible but no improvement. Upper Bound remains unchanged: UB = {UB:.2f}")
                 logging.info(f'Binary combination in SP2: x_ck = {sp2_sol.x_ck}')
-            
-            # Check convergence before adding cut
-            if UB - LB <= Xi:
-                logging.info(f"Convergence achieved: UB - LB = {UB - LB:.2f} <= Xi = {Xi}")
-                logging.info("Terminating decomposition loop without adding new OC block.")
-                break
-            
             # check if x_ck KKT pattern has already had a KKT OC block added; if so, skip adding another to force diversification in future iterations
             key = pattern_key(sp2_sol.x_ck)
             if key in generated_patterns_kkt_blocks:
@@ -284,6 +286,7 @@ def main(Verbose: bool = True) -> None:
             logging.info(f"The KKT OC block was added based on x_ck pattern: {sp2_sol.x_ck if sp2_sol.feasible else sp1_sol.x_ck}")
             # logging.info(f"The KKT OC block was added based on x_ck pattern: {key}")
             logging.info("-"*70)
+    
     # Final Solution Summary
     logging.info("\n" + "#"*70)
     logging.info("Finished Yue-KKT Decomposition run.")
@@ -300,7 +303,7 @@ def main(Verbose: bool = True) -> None:
         logging.info(best_sp2_sol)
     else:
         logging.info("No feasible solution found during the decomposition process.")
-
+    
     # Print all nonzero decision variables from final solved models
     if mp.model.SolCount > 0:
         log_nonzero_gurobi_vars(mp.model, "Master Problem")
