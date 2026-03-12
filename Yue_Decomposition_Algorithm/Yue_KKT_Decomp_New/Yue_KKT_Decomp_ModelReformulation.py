@@ -10,7 +10,8 @@ from .MP_KKT_ModelReformulation import MasterProblem
 from .SP1_ModelReformulation import SubProblem1
 from .SP2_ModelReformulation import SubProblem2
 # from shanghai_instance import make_shanghai_instance
-from Instances.shanghai_instance_scaled import make_shanghai_instance_scaled
+# from Instances.shanghai_instance_scaled import make_shanghai_instance_scaled
+from Instances.shanghai_instance_effective import make_shanghai_instance_effective
 
 
 def setup_logger() -> None:
@@ -137,13 +138,19 @@ def pattern_key(x_ck_fixed: dict) -> tuple:
     # sort to be deterministic
     return tuple(sorted((c, k, int(round(v))) for (c, k), v in x_ck_fixed.items()))
 
-def log_nonzero_gurobi_vars(model: gp.Model, model_name: str, tol: float = 1e-4) -> None:
+def log_nonzero_gurobi_vars(model: gp.Model, model_name: str, tol: float = 1e-4, var_names_to_log: list = None) -> None:
     """Log all nonzero variable values of a solved Gurobi model."""
+    logging.info(f"Objective value: {model.ObjVal:.4f}")
+
     logging.info(f"\nNonzero variables in {model_name} (|x| > {tol}):")
     count = 0
     for v in model.getVars():
         val = v.X
         if abs(val) > tol:
+            # If filter list provided, only log if variable name starts with one of the filters
+            if var_names_to_log is not None:
+                if not any(v.VarName.startswith(name) for name in var_names_to_log):
+                    continue
             logging.info(f"  {v.VarName} = {val:.10g}")
             count += 1
     logging.info(f"Total nonzero vars in {model_name}: {count}")
@@ -152,11 +159,11 @@ def main(Verbose: bool = True) -> None:
     solver_time_limit = 300     # seconds per solve (MP, SP1, SP2)
     solver_time_limit_sp2 = 1800  # longer time limit for SP2 due to feasibility check necessity
     Xi = 1e-1                     # termination tolerance (UB - LB <= Xi)
-    max_iterations = 3         # maximum number of iterations
+    max_iterations = 5         # maximum number of iterations
     # Verbose = True              # enable detailed output
 
     # Load instance data
-    shanghai_data = make_shanghai_instance_scaled()
+    shanghai_data = make_shanghai_instance_effective()
 
     # Starting Configuration
     LB = -np.inf
@@ -242,10 +249,13 @@ def main(Verbose: bool = True) -> None:
                 logging.info(f"Subproblem 2 feasible but no improvement. Upper Bound remains unchanged: UB = {UB:.2f}")
                 logging.info(f'Binary combination in SP2: x_ck = {sp2_sol.x_ck}')
             
-            # Check convergence before adding cut
+            # Check convergence or finish before adding cut
             if UB - LB <= Xi:
                 logging.info(f"Convergence achieved: UB - LB = {UB - LB:.2f} <= Xi = {Xi}")
                 logging.info("Terminating decomposition loop without adding new OC block.")
+                break
+            if iteration == max_iterations:
+                logging.info(f"Maximum iterations reached: {iteration}. Terminating decomposition loop without adding new OC block.")
                 break
             
             # check if x_ck KKT pattern has already had a KKT OC block added; if so, skip adding another to force diversification in future iterations
@@ -262,6 +272,10 @@ def main(Verbose: bool = True) -> None:
                 mp._add_kkt_oc_block(sp2_sol.x_ck)
                 # mp._add_kkt_oc_block_sos1(sp2_sol.x_ck)
         else:
+            if iteration == max_iterations:
+                logging.info(f"Maximum iterations reached: {iteration}. Terminating decomposition loop without adding new OC block.")
+                break
+
             logging.info("Subproblem 2 is infeasible -> Upper bound remains unchanged.")
             key = pattern_key(sp1_sol.x_ck)
             if key in generated_patterns_kkt_blocks:
@@ -285,6 +299,44 @@ def main(Verbose: bool = True) -> None:
             # logging.info(f"The KKT OC block was added based on x_ck pattern: {key}")
             logging.info("-"*70)
     # Final Solution Summary
+    def _nonzero_items(d: dict, tol: float = 1e-6):
+        return [(k, v) for k, v in d.items() if abs(float(v)) > tol]
+
+    def _log_dict(name: str, d: dict, tol: float = 1e-6) -> None:
+        nz = _nonzero_items(d, tol)
+        logging.info(f"• {name}: {len(nz)} nonzero")
+        for k, v in sorted(nz):
+            logging.info(f"    {name}{k} = {float(v):.10g}")
+
+    def log_compact_best_solution(best_mp_sol, best_sp2_sol, tol: float = 1e-6) -> None:
+        logging.info("\n" + "#"*70)
+        logging.info("Best Solution found (nonzero relevant vars only, no duals):")
+        logging.info("" + "#"*70)
+
+        logging.info("\nMunicipality [Leader]")
+        logging.info("" + "-"*70)
+        logging.info(f"Objective value: {best_mp_sol.mp_obj:.2f}")
+        leader_dict_vars = ["q_gsw", "q_slw", "q_siw", "z_wh", "y_wh"]
+        leader_scalar_vars = ["mu_land", "mu_inc", "mu_kiln"]
+
+        logging.info(f"\nNonzero variables in Leader Problem (|x| > {tol}):")
+
+        for name in leader_dict_vars:
+            _log_dict(name, getattr(best_mp_sol, name))
+
+        for name in leader_scalar_vars:
+            val = float(getattr(best_mp_sol, name))
+            if abs(val) > tol:
+                logging.info(f"{name} = {val:.10g}")
+
+        logging.info("\nCement Producer [Follower]")
+        logging.info("" + "-"*70)
+        logging.info(f"Objective value: {last_sp2_model.ObjVal:.2f}")
+        follower_dict_vars = ["x_ck", "q_cf", "r_sw", "q_scw"]
+        logging.info(f"\nNonzero variables in Follower Problem (|x| > {tol}):")
+        for name in follower_dict_vars:
+            _log_dict(name, getattr(best_sp2_sol, name))
+    
     logging.info("\n" + "#"*70)
     logging.info("Finished Yue-KKT Decomposition run.")
     logging.info(f"Iterations {iteration}")
@@ -293,19 +345,32 @@ def main(Verbose: bool = True) -> None:
     logging.info(f"Final Gap = {(UB - LB):.2f} (tolerance Xi = {Xi})")
     logging.info(f"Cutted patterns: {generated_patterns_kkt_blocks}")
     if best_mp_sol is not None and best_sp2_sol is not None:
-        logging.info("\nBest Solution found:")
-        logging.info("Master Problem Solution (Leader Decisions):")
-        logging.info(best_mp_sol)
-        logging.info("\nSubproblem 2 Solution (Follower Reaction):")
-        logging.info(best_sp2_sol)
+        # logging.info("\nBest Solution found:")
+        # logging.info("Master Problem Solution (Leader Decisions):")
+        # logging.info(best_mp_sol)
+        # logging.info("\nSubproblem 2 Solution (Follower Reaction):")
+        # logging.info(best_sp2_sol)
+
+        log_compact_best_solution(best_mp_sol, best_sp2_sol)
     else:
         logging.info("No feasible solution found during the decomposition process.")
 
     # Print all nonzero decision variables from final solved models
+    leader_vars = ["q_gsw", "q_slw", "q_siw", "mu_land", "mu_inc", "mu_kiln", "z_wh", "y_wh"]
+    follower_vars = ["x_ck", "q_cf", "r_sw", "q_scw"]
     if mp.model.SolCount > 0:
-        log_nonzero_gurobi_vars(mp.model, "Master Problem")
+        logging.info("\n" + "#"*70)
+        logging.info("Best Solution found (nonzero relevant vars only, no duals):")
+        logging.info("" + "#"*70)
+
+        logging.info("\nMunicipality [Leader]")
+        logging.info("" + "-"*70)
+        log_nonzero_gurobi_vars(mp.model, "Leader Problem [Municipality]", var_names_to_log=leader_vars)
+    
     if last_sp2_model is not None and last_sp2_model.SolCount > 0:
-        log_nonzero_gurobi_vars(last_sp2_model, "Subproblem 2")
+        logging.info("\n\nCement Producer [Follower]")
+        logging.info("" + "-"*70)
+        log_nonzero_gurobi_vars(last_sp2_model, "Follower Problem [Cement Producer]", var_names_to_log=follower_vars)
 
 
 if __name__ == "__main__":

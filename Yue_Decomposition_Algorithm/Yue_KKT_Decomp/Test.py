@@ -1,14 +1,24 @@
-from instance_loader import InstanceData
-from MP_KKT import MasterProblem
-from SP1 import SubProblem1
-from SP2 import SubProblem2
-from shanghai_instance import make_shanghai_instance
+import sys
+from pathlib import Path
+
+# Ensure project root is importable (so "Instances" resolves)
+ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from Instances.instance_loader import InstanceData
+from Yue_Decomposition_Algorithm.Yue_KKT_Decomp_New.MP_KKT_ModelReformulation import MasterProblem
+from Yue_Decomposition_Algorithm.Yue_KKT_Decomp_New.SP1_ModelReformulation import SubProblem1
+from Yue_Decomposition_Algorithm.Yue_KKT_Decomp_New.SP2_ModelReformulation import SubProblem2
+# from shanghai_instance import make_shanghai_instance
+from Instances.shanghai_instance_effective import make_shanghai_instance_effective
+from Instances.shanghai_instance_scaled import make_shanghai_instance_scaled
 
 
 def main() -> None:
     # data = InstanceData()
     # data.validate()
-    shanghai_data = make_shanghai_instance()
+    shanghai_data = make_shanghai_instance_effective()
     print(shanghai_data)
     
 

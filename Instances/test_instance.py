@@ -70,6 +70,7 @@ budget_cem = 150000000          # Cement facility budget for investing in pre- &
 alpha_c = [10000,8000]       # Energy content needed in cement kiln (GJ/ton)
 beta_f = [25]                # Energy content of coal (GJ/ton)
 beta_w = [8,16]             # Energy content of waste types (GJ/ton) - high moisture/low moisture
+eta_w = [0.65, 0.2]          # Weight reduction after pre-processing for waste types (0 < eta_w <= 1, where 1 means no reduction)
 
 tau = 10e-4                     # Small positive value for follower objective to account for leader cost (avoids symmetries)
 

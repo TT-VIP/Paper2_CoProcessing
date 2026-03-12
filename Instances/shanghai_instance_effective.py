@@ -78,6 +78,7 @@ class ShanghaiInstance:
     beta_f: List[float]         # beta[f] Calorific value of coal types (GJ/t)
     alpha_c: List[float]        # alpha[c] Energy requirement of cement kiln (GJ/period) (or consistent with your model)
     beta_w: List[float]         # beta[w] Calorific value of waste types (GJ/t)
+    eta_w: List[float]          # eta[w] Weight reductio after pre-processing for waste type w (0 < eta_w <= 1, where 1 means no reduction)
 
     c_invest_k: List[float]         # c_invest[k] Investment cost for Pre- & Co-processing facility per capacity (CNY)
     c_preproc_w: List[float]        # c_preproc[w] Pre-processing cost per waste type (CNY/t)
@@ -102,7 +103,7 @@ def crf(i: float, n: int) -> float:
     return (i * (1 + i) ** n) / ((1 + i) ** n - 1)
 
 
-def make_shanghai_instance_scaled(seed: int = 7) -> ShanghaiInstance:
+def make_shanghai_instance_effective(seed: int = 7) -> ShanghaiInstance:
     rng = random.Random(seed)
 
     # -----------------------------
@@ -235,15 +236,16 @@ def make_shanghai_instance_scaled(seed: int = 7) -> ShanghaiInstance:
     # Kiln daily energy requirement: scale with 6 cement plants
     alpha_c = [rng.randint(7000, 12000) for _ in C]
 
-    beta_w = [8.0, 16.0]
+    beta_w = [12.0*0.3, 16.0*0.6]   # GJ/t for waste types, adjusted by moisture content (high moisture reduced by 70%, medium moisture reduced by 30%)
+    eta_w = [0.65, 0.2]
 
     # Investment CAPEX by option size (CNY) – extend to K=3
     c_invest_k = [70_000.0, 110_000.0, 150_000.0]
 
     # Preprocessing cost by waste type
-    c_preproc_w = [150.0, 110.0]
+    c_preproc_w = [150.0, 125.0]
 
-    c_penalty = 160.0
+    c_penalty = 100.0
     budget_cem = 350_000.0  # bigger portfolio-level budget for 6 plants
 
     tau = 1e-3
@@ -254,7 +256,7 @@ def make_shanghai_instance_scaled(seed: int = 7) -> ShanghaiInstance:
     CRF = crf(i_rate, lifetime_years)
     capex_ann = [c_invest_k[k] * CRF for k in K]
     opex_fix_ann = [c_invest_k[k] * 0.06 for k in K]
-    fixcost_invest_k = [(capex_ann[k] + opex_fix_ann[k]) / 1000 for k in K]     # divide by 1000 to scale down to daily cost, because only 0.1% of annual waste is modeled in this instance
+    fixcost_invest_k = [(capex_ann[k] + opex_fix_ann[k]) for k in K]     # divide by 1000 to scale down to daily cost, because only 0.1% of annual waste is modeled in this instance
 
     # Big-M value for cut generation
     M_primal = {
@@ -317,7 +319,7 @@ def make_shanghai_instance_scaled(seed: int = 7) -> ShanghaiInstance:
         phi_max=phi_max,
         phi_wh=phi_wh,
         price_f=price_f, beta_f=beta_f,
-        alpha_c=alpha_c, beta_w=beta_w,
+        alpha_c=alpha_c, beta_w=beta_w, eta_w=eta_w,
         c_invest_k=c_invest_k, c_preproc_w=c_preproc_w,
         c_penalty=c_penalty, budget_cem=budget_cem,
         tau=tau,

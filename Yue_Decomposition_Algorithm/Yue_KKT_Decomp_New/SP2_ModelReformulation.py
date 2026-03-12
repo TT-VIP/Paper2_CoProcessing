@@ -327,6 +327,6 @@ class SubProblem2:
 
         m.setObjective(
             data.weight_env*(emission_transport + emission_treatment + emission_fuel) +
-            # data.weight_mon*(cost_transport + cost_treatment + cost_subsidy),
             data.weight_mon*(cost_transport + cost_treatment + cost_subsidy),
+            # data.weight_mon*(cost_transport + cost_treatment),
             GRB.MINIMIZE)

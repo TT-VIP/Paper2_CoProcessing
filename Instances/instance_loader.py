@@ -29,7 +29,7 @@ class InstanceData:
             budget_municipality, phi_max, phi_wh,
             # Follower parameters
             price_f, c_invest_k, c_preproc_w, c_penalty, budget_cem,
-            alpha_c, beta_f, beta_w, tau,
+            alpha_c, beta_f, beta_w, eta_w, tau,
             fixcost_invest_k, CRF,
             M_primal, M_dual
         )
@@ -102,6 +102,7 @@ class InstanceData:
         self.alpha_c = alpha_c
         self.beta_f = beta_f
         self.beta_w = beta_w
+        self.eta_w = eta_w
         
         self.tau = tau
         self.fixcost_invest_k = fixcost_invest_k
