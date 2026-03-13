@@ -113,6 +113,18 @@ class MasterProblem:
         self.r_sw0 = None
         self.q_cf0 = None
         self.q_scw0 = None
+
+        # Store objective components for posteriori analysis
+        self.obj_emission_transport = None
+        self.obj_emission_treatment = None
+        self.obj_emission_fuel = None
+        self.obj_cost_transport = None
+        self.obj_cost_treatment = None
+        self.obj_cost_subsidy = None
+        self.obj_total_env = None
+        self.obj_total_env_weighted = None
+        self.obj_total_mon = None
+        self.obj_total_mon_weighted = None
     #endregion
 
     # =============================================================================
@@ -397,7 +409,7 @@ class MasterProblem:
 
         # ===== LEADER OBJECTIVE =====
         # 1) Transport emissions
-        emission_transport = data.epsilon_truck * (
+        self.obj_emission_transport = data.epsilon_truck * (
             gp.quicksum(self.q_gsw[g,s,w] * data.TD_gs[g][s] for g in data.G for s in data.S for w in data.W) +
             gp.quicksum(self.q_slw[s,l,w] * data.TD_sl[s][l] for s in data.S for l in data.L for w in data.W) +
             gp.quicksum(self.q_siw[s,i,w] * data.TD_si[s][i] for s in data.S for i in data.I for w in data.W) +
@@ -405,20 +417,20 @@ class MasterProblem:
         )
 
         # 2) Treatment emissions
-        emission_treatment = (
+        self.obj_emission_treatment = (
             gp.quicksum(data.epsilon_land[w] * self.q_slw[s,l,w] for s in data.S for l in data.L for w in data.W) +
             gp.quicksum(data.epsilon_inc[w] * self.q_siw[s,i,w] for s in data.S for i in data.I for w in data.W) +
             gp.quicksum(data.epsilon_inc[w] * self.r_sw0[s,w] for s in data.S for w in data.W)
         )
 
         # 3) Fuel emissions (cement kiln)
-        emission_fuel = (
+        self.obj_emission_fuel = (
             gp.quicksum(data.epsilon_kiln_f[f] * self.q_cf0[c,f] for c in data.C for f in data.F) +
             gp.quicksum(data.epsilon_kiln_w[w] * self.q_scw0[s,c,w] for s in data.S for c in data.C for w in data.W)
         )
 
         # 4) Transport costs
-        cost_transport = data.c_truck * (
+        self.obj_cost_transport = data.c_truck * (
             gp.quicksum(self.q_gsw[g,s,w] * data.TD_gs[g][s] for g in data.G for s in data.S for w in data.W) +
             gp.quicksum(self.q_slw[s,l,w] * data.TD_sl[s][l] for s in data.S for l in data.L for w in data.W) +
             gp.quicksum(self.q_siw[s,i,w] * data.TD_si[s][i] for s in data.S for i in data.I for w in data.W) +
@@ -427,23 +439,49 @@ class MasterProblem:
         )
 
         # 5) Treatment costs
-        cost_treatment = (
+        self.obj_cost_treatment = (
             data.c_land * gp.quicksum(self.q_slw[s,l,w] for s in data.S for l in data.L for w in data.W) +
             data.c_inc * gp.quicksum(self.q_siw[s,i,w] for s in data.S for i in data.I for w in data.W) +
             # (data.c_inc-data.c_penalty) * gp.quicksum(self.r_sw0[s,w] for s in data.S for w in data.W)
             data.c_inc * gp.quicksum(self.r_sw0[s,w] for s in data.S for w in data.W)
-            # data.c_inc * gp.quicksum(self.r_sw0[s,w] for s in data.S for w in data.W)
+            # (data.c_inc-1) * gp.quicksum(self.r_sw0[s,w] for s in data.S for w in data.W)
         )
 
         # 6) Subsidy cost
-        cost_subsidy = gp.quicksum(data.phi_wh[w][h] * self.y_wh[w,h] for w in data.W for h in data.H)
-
+        self.obj_cost_subsidy = gp.quicksum(data.phi_wh[w][h] * self.y_wh[w,h] for w in data.W for h in data.H)
         m.setObjective(
-            data.weight_env*(emission_transport + emission_treatment + emission_fuel) +
-            data.weight_mon*(cost_transport + cost_treatment + cost_subsidy),
-            # data.weight_mon*(cost_transport + cost_treatment),
+            data.weight_env*(self.obj_emission_transport + self.obj_emission_treatment + self.obj_emission_fuel) +
+            data.weight_mon*(self.obj_cost_transport + self.obj_cost_treatment + self.obj_cost_subsidy),
+            # data.weight_mon*(self.obj_cost_transport + self.obj_cost_treatment),
             GRB.MINIMIZE)
 
+        # Store objective components for posteriori analysis
+        self.obj_total_env = self.obj_emission_transport + self.obj_emission_treatment + self.obj_emission_fuel
+        self.obj_total_env_weighted = data.weight_env * self.obj_total_env
+
+        self.obj_total_mon = self.obj_cost_transport + self.obj_cost_treatment + self.obj_cost_subsidy
+        self.obj_total_mon_weighted = data.weight_mon * self.obj_total_mon
+    #endregion
+
+    #region Method for objective breakdown
+    def get_objective_breakdown(self) -> Dict[str, float]:
+        """Evaluate objective components at current incumbent."""
+        if self.model is None or self.model.SolCount == 0:
+            raise RuntimeError("No MP solution available.")
+
+        return {
+            "Transport emissions": float(self.obj_emission_transport.getValue()),
+            "Treatment emissions": float(self.obj_emission_treatment.getValue()),
+            "Fueling emissions": float(self.obj_emission_fuel.getValue()),
+            "Total emissions (unweighted)": float(self.obj_total_env.getValue()),
+            f"Total emissions (weighted {self.instance.weight_env:.2f})": float(self.obj_total_env_weighted.getValue()),
+            "Transport cost": float(self.obj_cost_transport.getValue()),
+            "Treatment cost": float(self.obj_cost_treatment.getValue()),
+            "Subsidy cost": float(self.obj_cost_subsidy.getValue()),
+            "Total costs (unweighted)": float(self.obj_total_mon.getValue()),
+            f"Total costs (weighted {self.instance.weight_mon:.3f})": float(self.obj_total_mon_weighted.getValue()),
+            "Objective value": float(self.model.ObjVal),
+        }
     #endregion
 
     # (later) Method to add Benders cut (after solving SP2)

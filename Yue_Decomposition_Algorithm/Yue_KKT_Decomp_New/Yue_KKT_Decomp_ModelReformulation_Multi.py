@@ -10,7 +10,8 @@ from .MP_KKT_ModelReformulation_Multi import MasterProblem
 from .SP1_ModelReformulation import SubProblem1
 from .SP2_ModelReformulation import SubProblem2
 # from shanghai_instance import make_shanghai_instance
-from Instances.shanghai_instance_scaled import make_shanghai_instance_scaled
+# from Instances.shanghai_instance_scaled import make_shanghai_instance_scaled
+from Instances.shanghai_instance_effective import make_shanghai_instance_effective
 
 
 def setup_logger() -> None:
@@ -160,7 +161,7 @@ def main(Verbose: bool = True) -> None:
     # Verbose = True              # enable detailed output
 
     # Load instance data
-    shanghai_data = make_shanghai_instance_scaled()
+    shanghai_data = make_shanghai_instance_effective()
 
     # Starting Configuration
     LB = -np.inf
@@ -366,11 +367,30 @@ def main(Verbose: bool = True) -> None:
 
         logging.info("\nMunicipality [Leader]")
         logging.info("" + "-"*70)
+
+        leader_obj_values = mp.get_objective_breakdown()
+        logging.info("\nObjective breakdown:\n")
+        # key column width for alignment
+        key_width_leader=max(len(k) for k in leader_obj_values.keys()) + 2
+        for index, (k, v) in enumerate(leader_obj_values.items(), start=1):
+            logging.info(f"{k:<{key_width_leader}} {v:>14.6f}")
+            if index in (5,10):  # Add extra spacing after transport and treatment costs for readability
+                logging.info("")
+
         log_nonzero_gurobi_vars(mp.model, "Leader Problem [Municipality]", var_names_to_log=leader_vars)
     
     if last_sp2_model is not None and last_sp2_model.SolCount > 0:
         logging.info("\n\nCement Producer [Follower]")
         logging.info("" + "-"*70)
+
+        follower_obj_values = sp2.get_objective_components()
+        logging.info("\nObjective breakdown:\n")
+        key_width_follower = max(len(k) for k in follower_obj_values.keys()) + 2
+        for index, (k, v) in enumerate(follower_obj_values.items(), start=1):
+            logging.info(f"{k:<{key_width_follower}} {v:>14.6f}")
+            if index == 6:
+                logging.info("")
+
         log_nonzero_gurobi_vars(last_sp2_model, "Follower Problem [Cement Producer]", var_names_to_log=follower_vars)
 
 

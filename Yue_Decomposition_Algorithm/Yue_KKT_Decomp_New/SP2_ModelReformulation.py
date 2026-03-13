@@ -55,6 +55,15 @@ class SubProblem2:
         # obtained optimal reaction value from SP1 (input to SP2, filled in build() method)
         self.sp1_optimal_value = None
 
+        # Objective unction components of lower level problem for posterior analysis
+        self.obj_cost_coal = None
+        self.obj_cost_invest = None
+        self.obj_cost_preproc = None
+        self.obj_cost_penalty = None
+        self.obj_cost_tiebreak = None
+        self.obj_revenue_subsidy = None
+        self.obj_total_follower = None
+
     def build(self, mp_solution: MasterSolution, sp1_solution: SubProblem1Solution, *, name: str = "SubProblem2", output_flag: int = 0):
         '''Build the Subproblem 2 model '''
         if self._build:
@@ -253,26 +262,44 @@ class SubProblem2:
         # region Optimality constraint
 
         # 1) Cost of coal
-        cost_coal = gp.quicksum(self.q_cf[c,f] * data.price_f[f] for c in data.C for f in data.F)
+        self.obj_cost_coal = gp.quicksum(self.q_cf[c,f] * data.price_f[f] for c in data.C for f in data.F)
         # 2) Investment cost
-        cost_invest = gp.quicksum(data.fixcost_invest_k[k] * self.x_ck[c,k] for c in data.C for k in data.K)
+        self.obj_cost_invest = gp.quicksum(data.fixcost_invest_k[k] * self.x_ck[c,k] for c in data.C for k in data.K)
         # 3) Pre-processing cost
-        cost_preproc = gp.quicksum(data.c_preproc_w[w] * self.q_scw[s,c,w] for s in data.S for c in data.C for w in data.W)
+        self.obj_cost_preproc = gp.quicksum(data.c_preproc_w[w] * self.q_scw[s,c,w] for s in data.S for c in data.C for w in data.W)
         # 4) Penalty cost
-        cost_penalty = data.c_penalty * gp.quicksum(self.r_sw[s,w] for s in data.S for w in data.W)
+        self.obj_cost_penalty = data.c_penalty * gp.quicksum(self.r_sw[s,w] for s in data.S for w in data.W)
         # 5) Small tie-breaking cost to avoid symmetries
-        cost_tiebreak = data.tau * gp.quicksum(self.q_scw[s,c,w] * data.TD_sc[s][c] for s in data.S for c in data.C for w in data.W)
+        self.obj_cost_tiebreak = data.tau * gp.quicksum(self.q_scw[s,c,w] * data.TD_sc[s][c] for s in data.S for c in data.C for w in data.W)
         # 6) Subsidy revenue
         # revenue_subsidy = gp.quicksum(data.phi_wh[w][h] * self.y_cwh[c,w,h] for c in data.C for w in data.W for h in data.H)
-        revenue_subsidy = gp.quicksum(self.q_scw[s,c,w] * gp.quicksum(data.phi_wh[w][h] * self.z_wh[w,h] for h in data.H) for s in data.S for c in data.C for w in data.W)  # equivalent formulation based on subsidy level choice z_wh
+        self.obj_revenue_subsidy = gp.quicksum(self.q_scw[s,c,w] * gp.quicksum(data.phi_wh[w][h] * self.z_wh[w,h] for h in data.H) for s in data.S for c in data.C for w in data.W)  # equivalent formulation based on subsidy level choice z_wh
 
         # Optimal value constraint
         m.addConstr(
-            cost_coal + cost_invest + cost_preproc + cost_penalty + cost_tiebreak - revenue_subsidy <= self.sp1_optimal_value + 1e-6,  # small tolerance to account for numerical issues
+            self.obj_cost_coal + self.obj_cost_invest + self.obj_cost_preproc + self.obj_cost_penalty + self.obj_cost_tiebreak - self.obj_revenue_subsidy <= self.sp1_optimal_value + 1e-6,  # small tolerance to account for numerical issues
         name="OptimalityConstraint"
         )
 
+        self.obj_total_follower = self.obj_cost_coal + self.obj_cost_invest + self.obj_cost_preproc + self.obj_cost_penalty + self.obj_cost_tiebreak - self.obj_revenue_subsidy
         #endregion
+
+    def get_objective_components(self):
+        '''Evaluate objective components at current incubent solution for posterior analysis'''
+        if self.model is None:
+            raise RuntimeError("Model is not built yet. Call build() before getting objective components.")
+        elif self.model.SolCount == 0:
+            raise RuntimeError("SP2 is infeasible / has no solution at the limited iterations. Cannot get objective components.")
+        
+        return {
+            "Coal cost": self.obj_cost_coal.getValue(),
+            "Investment cost": self.obj_cost_invest.getValue(),
+            "Pre-processing cost": self.obj_cost_preproc.getValue(),
+            "Penalty cost": self.obj_cost_penalty.getValue(),
+            "Tie-breaking cost": self.obj_cost_tiebreak.getValue(),
+            "Subsidies received": self.obj_revenue_subsidy.getValue(),
+            "Objective value": self.obj_total_follower.getValue()
+        }
 
     def _set_objective(self) -> None:
         '''
@@ -319,6 +346,7 @@ class SubProblem2:
             data.c_inc * gp.quicksum(self.q_siw[s,i,w] for s in data.S for i in data.I for w in data.W) +
             # (data.c_inc-data.c_penalty) * gp.quicksum(self.r_sw[s,w] for s in data.S for w in data.W)
             data.c_inc * gp.quicksum(self.r_sw[s,w] for s in data.S for w in data.W)
+            # (data.c_inc-1) * gp.quicksum(self.r_sw[s,w] for s in data.S for w in data.W)
         )
 
         # 6) Subsidy cost

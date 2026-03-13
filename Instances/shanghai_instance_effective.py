@@ -237,7 +237,6 @@ def make_shanghai_instance_effective(seed: int = 7) -> ShanghaiInstance:
     alpha_c = [rng.randint(7000, 12000) for _ in C]
 
     beta_w = [12.0*0.3, 16.0*0.6]   # GJ/t for waste types, adjusted by moisture content (high moisture reduced by 70%, medium moisture reduced by 30%)
-    eta_w = [0.65, 0.2]
 
     # Investment CAPEX by option size (CNY) – extend to K=3
     c_invest_k = [70_000.0, 110_000.0, 150_000.0]

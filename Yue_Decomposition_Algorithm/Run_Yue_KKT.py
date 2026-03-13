@@ -8,8 +8,8 @@ ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-# from Yue_KKT_Decomp_New.Yue_KKT_Decomp_ModelReformulation_Multi import main
-from Yue_KKT_Decomp_New.Yue_KKT_Decomp_ModelReformulation import main
+from Yue_KKT_Decomp_New.Yue_KKT_Decomp_ModelReformulation_Multi import main
+# from Yue_KKT_Decomp_New.Yue_KKT_Decomp_ModelReformulation import main
 
 
 def setup_logger() -> None:

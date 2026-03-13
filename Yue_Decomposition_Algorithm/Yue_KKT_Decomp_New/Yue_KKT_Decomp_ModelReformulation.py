@@ -140,7 +140,7 @@ def pattern_key(x_ck_fixed: dict) -> tuple:
 
 def log_nonzero_gurobi_vars(model: gp.Model, model_name: str, tol: float = 1e-4, var_names_to_log: list = None) -> None:
     """Log all nonzero variable values of a solved Gurobi model."""
-    logging.info(f"Objective value: {model.ObjVal:.4f}")
+    # logging.info(f"Objective value: {model.ObjVal:.4f}")
 
     logging.info(f"\nNonzero variables in {model_name} (|x| > {tol}):")
     count = 0
@@ -298,7 +298,8 @@ def main(Verbose: bool = True) -> None:
             logging.info(f"The KKT OC block was added based on x_ck pattern: {sp2_sol.x_ck if sp2_sol.feasible else sp1_sol.x_ck}")
             # logging.info(f"The KKT OC block was added based on x_ck pattern: {key}")
             logging.info("-"*70)
-    # Final Solution Summary
+    
+    #region Final Solution Summary
     def _nonzero_items(d: dict, tol: float = 1e-6):
         return [(k, v) for k, v in d.items() if abs(float(v)) > tol]
 
@@ -360,18 +361,37 @@ def main(Verbose: bool = True) -> None:
     follower_vars = ["x_ck", "q_cf", "r_sw", "q_scw"]
     if mp.model.SolCount > 0:
         logging.info("\n" + "#"*70)
-        logging.info("Best Solution found (nonzero relevant vars only, no duals):")
+        logging.info("Best Solution found (nonzero variables only, no duals):")
         logging.info("" + "#"*70)
 
         logging.info("\nMunicipality [Leader]")
         logging.info("" + "-"*70)
+
+        leader_obj_values = mp.get_objective_breakdown()
+        logging.info("\nObjective breakdown:\n")
+        # key column width for alignment
+        key_width_leader=max(len(k) for k in leader_obj_values.keys()) + 2
+        for index, (k, v) in enumerate(leader_obj_values.items(), start=1):
+            logging.info(f"{k:<{key_width_leader}} {v:>14.6f}")
+            if index in (5,10):  # Add extra spacing after transport and treatment costs for readability
+                logging.info("")
+
         log_nonzero_gurobi_vars(mp.model, "Leader Problem [Municipality]", var_names_to_log=leader_vars)
     
     if last_sp2_model is not None and last_sp2_model.SolCount > 0:
         logging.info("\n\nCement Producer [Follower]")
         logging.info("" + "-"*70)
-        log_nonzero_gurobi_vars(last_sp2_model, "Follower Problem [Cement Producer]", var_names_to_log=follower_vars)
 
+        follower_obj_values = sp2.get_objective_components()
+        logging.info("\nObjective breakdown:\n")
+        key_width_follower = max(len(k) for k in follower_obj_values.keys()) + 2
+        for index, (k, v) in enumerate(follower_obj_values.items(), start=1):
+            logging.info(f"{k:<{key_width_follower}} {v:>14.6f}")
+            if index == 6:
+                logging.info("")
+
+        log_nonzero_gurobi_vars(last_sp2_model, "Follower Problem [Cement Producer]", var_names_to_log=follower_vars)
+    #endregion
 
 if __name__ == "__main__":
     log_path = setup_logger()
