@@ -156,10 +156,10 @@ def log_nonzero_gurobi_vars(model: gp.Model, model_name: str, tol: float = 1e-4,
     logging.info(f"Total nonzero vars in {model_name}: {count}")
 
 def main(Verbose: bool = True) -> None:
-    solver_time_limit = 300     # seconds per solve (MP, SP1, SP2)
+    solver_time_limit = 500     # seconds per solve (MP, SP1, SP2)
     solver_time_limit_sp2 = 1800  # longer time limit for SP2 due to feasibility check necessity
     Xi = 1e-1                     # termination tolerance (UB - LB <= Xi)
-    max_iterations = 5         # maximum number of iterations
+    max_iterations = 4         # maximum number of iterations
     # Verbose = True              # enable detailed output
 
     # Load instance data

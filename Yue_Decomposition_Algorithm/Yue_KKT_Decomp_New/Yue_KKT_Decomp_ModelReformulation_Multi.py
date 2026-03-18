@@ -154,10 +154,10 @@ def log_nonzero_gurobi_vars(model: gp.Model, model_name: str, tol: float = 1e-4,
             count += 1
 
 def main(Verbose: bool = True) -> None:
-    solver_time_limit = 300     # seconds per solve (MP, SP1, SP2)
+    solver_time_limit = 500     # seconds per solve (MP, SP1, SP2)
     solver_time_limit_sp2 = 1800  # longer time limit for SP2 due to feasibility check necessity
     Xi = 10                     # termination tolerance (UB - LB <= Xi)
-    max_iterations = 3         # maximum number of iterations
+    max_iterations = 4         # maximum number of iterations
     # Verbose = True              # enable detailed output
 
     # Load instance data
@@ -261,6 +261,9 @@ def main(Verbose: bool = True) -> None:
             if UB - LB <= Xi:
                 logging.info(f"Convergence achieved: UB - LB = {UB - LB:.2f} <= Xi = {Xi}")
                 logging.info("Terminating decomposition loop without adding new OC block.")
+                break
+            if iteration == max_iterations:
+                logging.info(f"Maximum iterations reached: {iteration}. Terminating decomposition loop without adding new OC block.")
                 break
             
             # check if x_ck KKT pattern has already had a KKT OC block added; if so, skip adding another to force diversification in future iterations
