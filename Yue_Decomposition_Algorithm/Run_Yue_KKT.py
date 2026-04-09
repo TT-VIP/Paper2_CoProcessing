@@ -9,8 +9,9 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 # from Yue_KKT_Decomp_New.Yue_KKT_Decomp_ModelReformulation_Multi import main
-from Yue_KKT_Decomp_New.Yue_KKT_Decomp_ModelReformulation import main
-
+# from Yue_KKT_Decomp_New.Yue_KKT_Decomp_ModelReformulation import main
+from Yue_KKT_Decomp_New.Yue_KKT_Decomp_ModelReformulation_copy import main
+from Instances.shanghai_instance_effective import make_shanghai_instance_effective
 
 def setup_logger() -> None:
     """Setup logging to file and console"""
@@ -38,4 +39,10 @@ def setup_logger() -> None:
 if __name__ == "__main__":
     log_path = setup_logger()
     logging.info(f"Yue-KKT Decomposition Algorithm started. Logs will be saved to {log_path}")
-    main(Verbose=True)
+
+    solver_time_limit = 500     # Time limit for solving MP and SPs (in seconds)
+    Xi = 1e-1                   # Convergence threshold for leader objective improvement
+    max_iterations = 4          # Maximum number of iterations to prevent infinite loops
+    instance = make_shanghai_instance_effective()  # Load instance data (can be replaced with other instances)
+
+    main(Verbose=True, solver_time_limit=solver_time_limit, Xi=Xi, max_iterations=max_iterations, instance=instance)

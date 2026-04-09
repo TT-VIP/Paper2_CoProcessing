@@ -18,7 +18,7 @@ class InstanceData:
         """Initialize instance data from test_instance module"""
         from test_instance import (
             # Sets
-            G_max, S_max, W_max, I_max, L_max, C_max, K_max, F_max, H_max, J_max,
+            G_max, S_max, W_max, I_max, L_max, C_max, K_max, F_max, H_max,
             G, S, W, I, L, C, K, F, H, J,
             # Leader parameters
             TD_gs, TD_sl, TD_si, TD_si_avg, TD_sc,
@@ -31,7 +31,7 @@ class InstanceData:
             price_f, c_invest_k, c_preproc_w, c_penalty, budget_cem,
             alpha_c, beta_f, beta_w, eta_w, tau,
             fixcost_invest_k, CRF,
-            M_primal, M_dual
+            M_primal, M_dual, U_w
         )
         
         # ===== SETS =====
@@ -44,8 +44,6 @@ class InstanceData:
         self.K_max = K_max
         self.F_max = F_max
         self.H_max = H_max
-
-        self.J_max = J_max
         
         self.G = G
         self.S = S
@@ -56,8 +54,6 @@ class InstanceData:
         self.K = K
         self.F = F
         self.H = H
-
-        self.J = J
         
         # ===== LEADER (MUNICIPALITY) PARAMETERS =====
         self.TD_gs = TD_gs
@@ -110,6 +106,8 @@ class InstanceData:
 
         self.M_primal = M_primal
         self.M_dual = M_dual
+
+        self.U_w = U_w
     
     def validate(self):
         """Validate instance data for consistency and feasibility"""

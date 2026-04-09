@@ -13,6 +13,7 @@ from dataclasses import dataclass
 class MasterSolution:
     """Data class to store Master Problem solution"""
     mp_obj: float
+    mp_bound: float                             # Store MP bound (e.g., for gap analysis)
     q_gsw: Dict[Tuple[int, int, int], float]    # Waste flow from generation g to transfer s
     q_slw: Dict[Tuple[int, int, int], float]    # Waste flow from transfer s to landfill l
     q_siw: Dict[Tuple[int, int, int], float]    # Waste flow from transfer s to incinerator i
@@ -21,6 +22,7 @@ class MasterSolution:
     mu_kiln: float                              # Waste capacity quota for cement kilns
     z_wh: Dict[Tuple[int, int], int]            # Subsidy level choice for waste type w
     y_wh: Dict[Tuple[int, int], float]          # Linearization variable for subsidy cost (y_wh[w,h] = z_wh[w,h] * sum_{s,c} q_scw0[s,c,w])
+    objective_components: dict[str, float] | None    # Optional dictionary to hold the components of the leader objective function for posterior analysis (e.g., transport emissions, treatment emissions, subsidy cost, etc.)
 
 # Class for storing the KKT optimality cut model components, i.e. all variables and constraints related to the optimality cut for one l in L (for readability and debugging purposes)
 @dataclass
@@ -186,6 +188,26 @@ class MasterProblem:
         self.model.optimize()
     #endregion
 
+    #region Method for objective breakdown
+    def get_objective_breakdown(self) -> Dict[str, float]:
+        """Evaluate objective components at current incumbent."""
+        if self.model is None or self.model.SolCount == 0:
+            raise RuntimeError("No MP solution available.")
+
+        return {
+            "Transport emissions": float(self.obj_emission_transport.getValue()),
+            "Treatment emissions": float(self.obj_emission_treatment.getValue()),
+            "Fueling emissions": float(self.obj_emission_fuel.getValue()),
+            "Total emissions (unweighted)": float(self.obj_total_env.getValue()),
+            f"Total emissions (weighted {self.instance.weight_env:.2f})": float(self.obj_total_env_weighted.getValue()),
+            "Transport cost": float(self.obj_cost_transport.getValue()),
+            "Treatment cost": float(self.obj_cost_treatment.getValue()),
+            "Subsidy cost": float(self.obj_cost_subsidy.getValue()),
+            "Total costs (unweighted)": float(self.obj_total_mon.getValue()),
+            f"Total costs (weighted {self.instance.weight_mon:.3f})": float(self.obj_total_mon_weighted.getValue()),
+            "Objective value": float(self.model.ObjVal),
+        }
+    #endregion
 
     #region Method to store solution within a dataclass
     def extract_solution(self) -> MasterSolution:
@@ -197,12 +219,14 @@ class MasterProblem:
         elif self.model.status == GRB.TIME_LIMIT and self.model.SolCount > 0:
             logging.info('⚠ Master Problem solve time limit reached. Best solution found will be extracted.')
         else:
-            raise RuntimeError("Master Problem is not (sub)optimal; cannot extract solution because no solution is available.")
+            raise RuntimeError("Master Problem is not solvable within time limit; cannot extract solution because no solution is available.")
 
         data = self.instance
+        lead_obj_components = self.get_objective_breakdown()  # Get objective components for posterior analysis
 
         return MasterSolution(
             mp_obj = self.model.ObjVal,
+            mp_bound = self.model.ObjBound,
             q_gsw = {(g, s, w): self.q_gsw[g, s, w].X for g in data.G for s in data.S for w in data.W},
             q_slw = {(s, l, w): self.q_slw[s, l, w].X for s in data.S for l in data.L for w in data.W},
             q_siw = {(s, i, w): self.q_siw[s, i, w].X for s in data.S for i in data.I for w in data.W},
@@ -211,7 +235,8 @@ class MasterProblem:
             mu_kiln = self.mu_kiln.X,
             # rounding because of floating-point relaxation within gurobi (0.9999997 or 1.0000002 possible)
             z_wh = {(w, h): int(round(self.z_wh[w, h].X)) for w in data.W for h in data.H},
-            y_wh = {(w, h): self.y_wh[w, h].X for w in data.W for h in data.H}
+            y_wh = {(w, h): self.y_wh[w, h].X for w in data.W for h in data.H},
+            objective_components = lead_obj_components
         )
     #endregion
 
@@ -461,27 +486,6 @@ class MasterProblem:
 
         self.obj_total_mon = self.obj_cost_transport + self.obj_cost_treatment + self.obj_cost_subsidy
         self.obj_total_mon_weighted = data.weight_mon * self.obj_total_mon
-    #endregion
-
-    #region Method for objective breakdown
-    def get_objective_breakdown(self) -> Dict[str, float]:
-        """Evaluate objective components at current incumbent."""
-        if self.model is None or self.model.SolCount == 0:
-            raise RuntimeError("No MP solution available.")
-
-        return {
-            "Transport emissions": float(self.obj_emission_transport.getValue()),
-            "Treatment emissions": float(self.obj_emission_treatment.getValue()),
-            "Fueling emissions": float(self.obj_emission_fuel.getValue()),
-            "Total emissions (unweighted)": float(self.obj_total_env.getValue()),
-            f"Total emissions (weighted {self.instance.weight_env:.2f})": float(self.obj_total_env_weighted.getValue()),
-            "Transport cost": float(self.obj_cost_transport.getValue()),
-            "Treatment cost": float(self.obj_cost_treatment.getValue()),
-            "Subsidy cost": float(self.obj_cost_subsidy.getValue()),
-            "Total costs (unweighted)": float(self.obj_total_mon.getValue()),
-            f"Total costs (weighted {self.instance.weight_mon:.3f})": float(self.obj_total_mon_weighted.getValue()),
-            "Objective value": float(self.model.ObjVal),
-        }
     #endregion
 
     # (later) Method to add Benders cut (after solving SP2)
@@ -738,7 +742,7 @@ class MasterProblem:
 
         # ----- Add Optimality Cut -----
 
-        m.addConstr(lhs <= rhs, name=f"{pfx}_OptimalityCut")
+        m.addConstr(lhs <= rhs + 1e-6, name=f"{pfx}_OptimalityCut")     # add small tolerance to avoid numerical issues
         #endregion
 
         # create new KKTOCBlock with unique index l and given fixed follower pattern

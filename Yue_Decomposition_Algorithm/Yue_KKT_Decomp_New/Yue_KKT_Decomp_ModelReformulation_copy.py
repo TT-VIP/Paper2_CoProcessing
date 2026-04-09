@@ -1,18 +1,126 @@
 import numpy as np
+import math
 import logging
 from datetime import datetime
 from pathlib import Path
-import math
 import gurobipy as gp
 import time
+from enum import Enum, auto         # define a set of named constant values for decomposition status
+from dataclasses import dataclass
+from typing import Optional
 
 from Instances.instance_loader import InstanceData
-from .MP_KKT_ModelReformulation import MasterProblem
-from .SP1_ModelReformulation import SubProblem1
-from .SP2_ModelReformulation import SubProblem2
+from .MP_KKT_ModelReformulation import MasterProblem, MasterSolution
+from .SP1_ModelReformulation import SubProblem1, SubProblem1Solution
+from .SP2_ModelReformulation import SubProblem2, SubProblem2Solution
 # from shanghai_instance import make_shanghai_instance
 # from Instances.shanghai_instance_scaled import make_shanghai_instance_scaled
 from Instances.shanghai_instance_effective import make_shanghai_instance_effective
+
+
+class DecompositionStatus(Enum):
+    OPTIMAL_PROVEN = auto()
+    OPTIMAL_INCUMBENTS_MATCH = auto()
+    FEASIBLE_SUBOPTIMAL = auto()
+    NO_FEASIBLE_SOLUTION = auto()
+    MP_INFEASIBLE_OR_NO_SOLUTION = auto()
+
+@dataclass
+class DecompositionSolution:
+    status: DecompositionStatus             # Overall status of the decomposition algorithm at termination (e.g., optimality proven, feasible but not proven optimal, no feasible solution found, etc.)
+
+    xi: float                               # Convergence threshold for leader objective improvement (used for termination)
+    max_iterations: int                     # Maximum number of iterations allowed for the decomposition algorithm (used for termination)
+    iterations: int = 0                     # Actual number of iterations performed
+    total_solution_time: float = 0.0        # Total time taken for the entire decomposition algorithm (from start to termination)
+
+    lower_bound: float = -np.inf            # Best lower bound on the leader's objective value found at termination of decomposition (from MP)
+    upper_bound: float = np.inf             # Best upper bound on the leader's objective value found at termination of decomposition (from SP2)
+    final_gap_proven: float = np.inf        # Final true optimality gap (UB - LB) at termination, if applicable
+    final_gap_incumbents: float = np.inf    # Final gap based on incumbent solutions (SP2 obj - MP obj) at termination, if applicable
+
+    equality_tol: float = 1e-3
+
+    best_bilevel_mp_sol: Optional["MasterSolution"] = None
+    best_bilevel_sp2_sol: Optional["SubProblem2Solution"] = None
+
+    termination_reason: Optional[str] = None
+
+    def has_feasible_solution(self) -> bool:
+        return self.best_bilevel_sp2_sol is not None
+
+    def incumbents_match(self) -> bool:
+        if self.best_bilevel_mp_sol is None or self.best_bilevel_sp2_sol is None:
+            return False
+        # if self.best_bilevel_mp_sol.mp_obj is None or self.best_bilevel_sp2_sol.sp2_obj is None:
+        #     return False
+        return abs(self.best_bilevel_mp_sol.mp_obj - self.best_bilevel_sp2_sol.sp2_obj) <= self.equality_tol
+
+    def is_proven_optimal(self) -> bool:
+        return (
+            math.isfinite(self.lower_bound)
+            and math.isfinite(self.upper_bound)
+            and (self.upper_bound - self.lower_bound) <= self.xi
+        )
+
+    def is_optimal_by_incumbent_match(self) -> bool:
+        return self.has_feasible_solution() and self.incumbents_match()
+
+def build_decomposition_solution(
+    *,
+    iterations: int,
+    max_iterations: int,
+    total_solution_time: float,
+    LB: float,
+    UB: float,
+    Xi: float,
+    best_bilevel_mp_sol,
+    best_bilevel_sp2_sol,
+    termination_reason: str,
+    equality_tol: float = 1e-3,
+):
+    best_bilevel_mp_obj = None if best_bilevel_mp_sol is None else float(best_bilevel_mp_sol.mp_obj)
+    best_bilevel_sp2_obj = None if best_bilevel_sp2_sol is None else float(best_bilevel_sp2_sol.sp2_obj)
+
+    final_gap_proven = None
+    if math.isfinite(LB) and math.isfinite(UB):
+        final_gap_proven = UB - LB
+    
+    final_gap_incumbents = None
+    if best_bilevel_mp_obj is not None and best_bilevel_sp2_obj is not None:
+        final_gap_incumbents = abs(best_bilevel_sp2_obj - best_bilevel_mp_obj)
+
+    if math.isfinite(LB) and math.isfinite(UB) and (UB - LB <= Xi):
+        status = DecompositionStatus.OPTIMAL_PROVEN
+    elif (
+        best_bilevel_mp_obj is not None
+        and best_bilevel_sp2_obj is not None
+        and final_gap_incumbents <= equality_tol
+    ):
+        status = DecompositionStatus.OPTIMAL_INCUMBENTS_MATCH
+    elif best_bilevel_sp2_sol is not None:
+        status = DecompositionStatus.FEASIBLE_SUBOPTIMAL
+    elif termination_reason == "MP solution run returned no feasible solution":
+        status = DecompositionStatus.MP_INFEASIBLE_OR_NO_SOLUTION
+    else:
+        status = DecompositionStatus.NO_FEASIBLE_SOLUTION
+
+    return DecompositionSolution(
+        status=status,
+        xi=Xi,
+        max_iterations=max_iterations,
+        iterations=iterations,
+        total_solution_time=total_solution_time,
+        lower_bound=LB,
+        upper_bound=UB,
+        final_gap_proven=final_gap_proven,
+        final_gap_incumbents=final_gap_incumbents,
+        equality_tol=equality_tol,
+        best_bilevel_mp_sol=best_bilevel_mp_sol,
+        best_bilevel_sp2_sol=best_bilevel_sp2_sol,
+        termination_reason=termination_reason
+    )
+
 
 #region Setup Logger
 def setup_logger() -> None:
@@ -168,15 +276,12 @@ def main(
         max_iterations: int = 5,
         instance: InstanceData = None
 ) -> None:
-    # solver_time_limit = 500     # seconds per solve (MP, SP1, SP2)
-    # solver_time_limit_sp2 = 1800  # longer time limit for SP2 due to feasibility check necessity
-    # Xi = 1e-1                     # termination tolerance (UB - LB <= Xi)
-    # max_iterations = 4         # maximum number of iterations
-    # Verbose = True              # enable detailed output
 
     # Load instance data
     # shanghai_data = make_shanghai_instance_effective()
-    instance_data = instance if instance is not None else RuntimeError("Instance data must be provided to run the Decomposition Algorithm.")
+    if instance is None:
+        RuntimeError("Instance data must be provided to run the Decomposition Algorithm.")
+    instance_data = instance
 
     # Starting Configuration
     LB = -np.inf
@@ -190,8 +295,10 @@ def main(
     mp = MasterProblem(instance_data)
     mp.build(output_flag=1)
 
-    best_mp_sol = None
-    best_sp2_sol = None
+    best_bilevel_mp_sol = None
+    best_bilevel_sp2_sol = None
+    termination_reason = None
+
     last_sp2_model = None  # to store the last SP2 model for potential post-analysis
 
     generated_patterns_kkt_blocks = set()  # to track which patterns have had KKT OC blocks added, to avoid duplicates
@@ -216,6 +323,7 @@ def main(
             mp.solve(time_limit=solver_time_limit)
         if mp.model.SolCount == 0:
             logging.info("No solution found for Master Problem. Terminating.")
+            termination_reason = "MP solution run returned no feasible solution"
             break
         
         # LB update
@@ -233,8 +341,9 @@ def main(
         else:
             logging.info(f"LB remains unchanged: LB = {LB:.2f}")
 
-        log_bigM_binding(mp, instance_data)        # Log any big-M bindings in the current MP solution
         mp_sol = mp.extract_solution()
+        log_bigM_binding(mp, instance_data)        # Log any big-M bindings in the current MP solution
+        
 
 
         # Solve Subproblem 1 at leader solution (Follower Optimality)
@@ -259,8 +368,8 @@ def main(
             # Update upper bound and best solutions if better
             if float(sp2_sol.sp2_obj) < UB:
                 UB = float(sp2_sol.sp2_obj)
-                best_mp_sol = mp_sol
-                best_sp2_sol = sp2_sol
+                best_bilevel_mp_sol = mp_sol
+                best_bilevel_sp2_sol = sp2_sol
                 logging.info(f"Subproblem 2 feasible. Updated Upper Bound: UB = {UB:.2f}")
                 logging.info(f'Binary combination in SP2: x_ck = {sp2_sol.x_ck}')
             else:
@@ -269,11 +378,13 @@ def main(
             
             # Check convergence or finish before adding cut
             if UB - LB <= Xi:
-                logging.info(f"Convergence achieved: UB - LB = {UB - LB:.2f} <= Xi = {Xi}")
-                logging.info("Terminating decomposition loop without adding new OC block.")
+                logging.info(f"Convergence achieved: UB - LB <= Xi: {UB - LB:.2f} <= {Xi}")
+                logging.info("Terminating decomposition algorithm.")
+                termination_reason = "Convergence achieved based on bounds and Gap tolerance (UB - LB <= Xi)"
                 break
             if iteration == max_iterations:
-                logging.info(f"Maximum iterations reached: {iteration}. Terminating decomposition loop without adding new OC block.")
+                logging.info(f"Maximum iterations reached: {iteration}. Terminating decomposition algorithm.")
+                termination_reason = "Maximum iterations reached without convergence."
                 break
             
             # check if x_ck KKT pattern has already had a KKT OC block added; if so, skip adding another to force diversification in future iterations
@@ -291,7 +402,8 @@ def main(
                 # mp._add_kkt_oc_block_sos1(sp2_sol.x_ck)
         else:
             if iteration == max_iterations:
-                logging.info(f"Maximum iterations reached: {iteration}. Terminating decomposition loop without adding new OC block.")
+                logging.info(f"Maximum iterations reached: {iteration}. Terminating decomposition algorithm.")
+                termination_reason = "Maximum iterations reached without convergence."
                 break
 
             logging.info("Subproblem 2 is infeasible -> Upper bound remains unchanged.")
@@ -319,7 +431,21 @@ def main(
 
     # End timer for overall algorithm
     end_total = time.perf_counter()
-    total_time = end_total - start_total
+    decomp_solution_time = end_total - start_total
+
+    # Build DecompositionSolution object to summarize results
+    decomp_sol = build_decomposition_solution(
+        iterations=iteration,
+        max_iterations=max_iterations,
+        total_solution_time=decomp_solution_time,
+        LB=LB,
+        UB=UB,
+        Xi=Xi,
+        best_bilevel_mp_sol=best_bilevel_mp_sol,
+        best_bilevel_sp2_sol=best_bilevel_sp2_sol,
+        termination_reason=termination_reason,
+        equality_tol=1e-3
+    )
     
     #region Final Solution Summary
     def _nonzero_items(d: dict, tol: float = 1e-6):
@@ -329,8 +455,69 @@ def main(
         nz = _nonzero_items(d, tol)
         logging.info(f"• {name}: {len(nz)} nonzero")
         for k, v in sorted(nz):
-            logging.info(f"    {name}{k} = {float(v):.10g}")
+            logging.info(f"{name}{k} = {float(v):.10g}")
 
+    def solution_summary(decomp_sol: DecompositionSolution, tol: float = 1e-6) -> None:
+        logging.info("\n" + "#"*70)
+        logging.info("Decomposition Algorithm Summary:")
+        logging.info("#"*70)
+        logging.info(f"Status: {decomp_sol.status.name}")
+        logging.info(f"Termination Reason: {decomp_sol.termination_reason}")
+        logging.info(f"Iterations: {decomp_sol.iterations}/{decomp_sol.max_iterations}")
+        logging.info(f"Total Solution Time: {decomp_sol.total_solution_time:.2f} seconds")
+        logging.info(f"Final LB (best Master): {decomp_sol.lower_bound:.2f}")
+        logging.info(f"Final UB (best SP2): {decomp_sol.upper_bound:.2f}")
+        if decomp_sol.status is DecompositionStatus.OPTIMAL_PROVEN and decomp_sol.final_gap_proven is not None:
+            logging.info(f"Final Gap (proven): {decomp_sol.final_gap_proven:.2f}")
+        if decomp_sol.status is DecompositionStatus.OPTIMAL_INCUMBENTS_MATCH and decomp_sol.final_gap_incumbents is not None:
+            logging.info(f"Final Gap (incumbent solutions): {decomp_sol.final_gap_incumbents:.2f}")
+
+        if decomp_sol.status is DecompositionStatus.MP_INFEASIBLE_OR_NO_SOLUTION:
+            logging.info("No feasible solution found for Master Problem during decomposition.")
+        elif decomp_sol.status is DecompositionStatus.NO_FEASIBLE_SOLUTION:
+            logging.info("No feasible bilevel solution found during decomposition.")
+        else:
+            logging.info("\n" + "#"*70)
+            logging.info(f"Best bilevel solution found")
+            logging.info("#"*70)
+
+            logging.info("\nMunicipality [Leader]")
+            logging.info("" + "-"*70)
+
+            logging.info("\nObjective breakdown:\n")
+            for index, (component, value) in enumerate(decomp_sol.best_bilevel_mp_sol.objective_components.items(), start=1):
+                logging.info(f"{component:<30} {float(value):>14.6f}")
+                if index in (5,10):  # Add extra spacing after transport and treatment costs for readability
+                    logging.info("")
+            
+            leader_dict_vars = ["q_gsw", "q_slw", "q_siw", "z_wh", "y_wh"]
+            leader_scalar_vars = ["mu_land", "mu_inc", "mu_kiln"]
+
+            logging.info(f"\nNonzero variables in Leader Problem (|x| > {tol}):")
+            for name in leader_dict_vars:
+                _log_dict(name, getattr(decomp_sol.best_bilevel_mp_sol, name), tol)
+            for name in leader_scalar_vars:
+                val = float(getattr(decomp_sol.best_bilevel_mp_sol, name))
+                if abs(val) > tol:
+                    logging.info(f"{name} = {val:.10g}")
+
+            logging.info("\nCement Producer [Follower]")
+            logging.info("" + "-"*70)
+
+            logging.info("\nObjective breakdown:\n")
+            for index, (component, value) in enumerate(decomp_sol.best_bilevel_sp2_sol.objective_components.items(), start=1):
+                logging.info(f"{component:<30} {float(value):>14.6f}")
+                if index == 6:
+                    logging.info("")
+            
+            follower_dict_vars = ["x_ck", "q_cf", "r_sw", "q_scw"]
+            logging.info(f"\nNonzero variables in Follower Problem (|x| > {tol}):")
+            for name in follower_dict_vars:
+                _log_dict(name, getattr(decomp_sol.best_bilevel_sp2_sol, name), tol)
+
+    solution_summary(decomp_sol)
+
+    
     def log_compact_best_solution(best_mp_sol, best_sp2_sol, tol: float = 1e-6) -> None:
         logging.info("\n" + "#"*70)
         logging.info("Best Solution found (nonzero relevant vars only, no duals):")
@@ -362,20 +549,20 @@ def main(
     
     logging.info("\n" + "#"*70)
     logging.info("Finished Yue-KKT Decomposition run.")
-    logging.info(f"\nTotal time for Yue-KKT Decomposition Algorithm: {total_time:.2f} seconds")
+    logging.info(f"\nTotal time for Yue-KKT Decomposition Algorithm: {decomp_solution_time:.2f} seconds")
     logging.info(f"Iterations {iteration}")
     logging.info(f"Final LB = {LB:.2f}")
     logging.info(f"Final UB = {UB:.2f}")
     logging.info(f"Final Gap = {(UB - LB):.2f} (tolerance Xi = {Xi})")
     logging.info(f"Cutted patterns: {generated_patterns_kkt_blocks}")
-    if best_mp_sol is not None and best_sp2_sol is not None:
+    if best_bilevel_mp_sol is not None and best_bilevel_sp2_sol is not None:
         # logging.info("\nBest Solution found:")
         # logging.info("Master Problem Solution (Leader Decisions):")
         # logging.info(best_mp_sol)
         # logging.info("\nSubproblem 2 Solution (Follower Reaction):")
         # logging.info(best_sp2_sol)
 
-        log_compact_best_solution(best_mp_sol, best_sp2_sol)
+        log_compact_best_solution(best_bilevel_mp_sol, best_bilevel_sp2_sol)
     else:
         logging.info("No feasible solution found during the decomposition process.")
 

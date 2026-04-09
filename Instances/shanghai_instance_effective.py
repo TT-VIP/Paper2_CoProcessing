@@ -261,36 +261,23 @@ def make_shanghai_instance_effective(seed: int = 7) -> ShanghaiInstance:
     M_primal = {
         'F3': 10,
         'F4': max(alpha_c)*kappa_coproc+10,     # Maximmum energy content in co-processing
-        'F5': Q_k_max+1,                       # Maximum co-processing quantity
+        'F5': Q_k_max+1,                        # Maximum co-processing quantity
         'F9_1': Q_k_max+1,                      # Maximum co-processing quantity
-        'F9_2': Q_k_max+1,                       # Maximum co-processing quantity
-        'F9_3': Q_k_max+1,                       # Maximum co-processing quantity
-        'q_cw': Q_k_max+1,                       # Maximum quantity of waste processed at cement plant
-        'q_cf': max(alpha_c)+10,                   # Maximum quantity of coal processed at cement plant (based on maximum energy content needed)
-        'q_scw': Q_k_max+1,                      # Maximum quantity of waste allocated from transfer station to cement plant
-        'r_sw': max(Q_s)+1,                       # Maximum residual waste at transfer station after allocation
-        'y_cwh': Q_k_max+1                       # Maximum quantity of waste allocated to subsidy level h at cement plant c
+        'F9_2': Q_k_max+1,                      # Maximum co-processing quantity
+        'F9_3': Q_k_max+1,                      # Maximum co-processing quantity
+        'q_cf': max(alpha_c)+10,                # Maximum quantity of coal processed at cement plant (based on maximum energy content needed)
+        'q_scw': Q_k_max+1,                     # Maximum quantity of waste allocated from transfer station to cement plant
+        'r_sw': max(Q_s)+1,                     # Maximum residual waste at transfer station after allocation
+        'y_cwh': Q_k_max+1                      # Maximum quantity of waste allocated to subsidy level h at cement plant c
     }
 
     M_dual = {
-        # 'lam_F3': 10**6,     # Big-M for dual variable of constraint F3 (energy fulfillment constraint)
-        # 'lam_F4': 10**6,     # Big-M for dual variable of constraint F4 (maximum co-processing quantity)
-        # 'lam_F5': 10**10,     # Big-M for dual variable of constraint F5 (co-process capacity limited by investment decision)
-        # 'lam_F9_1': 10**20,   # Big-M for dual variable of constraint F9_1 (linking co-processing quantity to subsidy level h)
-        # 'lam_F9_2': 10**10,   # Big-M for dual variable of constraint F9_2 (linking co-processing quantity to subsidy level h)
-        # 'lam_F9_3': 10**6,   # Big-M for dual variable of constraint F9_3 (linking co-processing quantity to subsidy level h)
-        # 'pi_q_cw': 10**8,    # Big-M for dual variable of constraint limiting quantity of waste processed at cement plant
-        # 'pi_q_cf': 10**6,    # Big-M for dual variable of constraint limiting quantity of coal processed at cement plant
-        # 'pi_q_scw': 10**10,   # Big-M for dual variable of constraint limiting quantity of waste allocated from transfer station to cement plant
-        # 'pi_r_sw': 10**10,    # Big-M for dual variable of constraint limiting residual waste at transfer station after allocation
-        # 'pi_y_cwh': 10**20    # Big-M for dual variable of constraint linking subsidy level to co-processing quantity
         'lam_F3': 1e3,     # Big-M for dual variable of constraint F3 (energy fulfillment constraint)
         'lam_F4': 1e3,     # Big-M for dual variable of constraint F4 (maximum co-processing quantity)
         'lam_F5': 1e4,     # Big-M for dual variable of constraint F5 (co-process capacity limited by investment decision)
         'lam_F9_1': 1e4,   # Big-M for dual variable of constraint F9_1 (linking co-processing quantity to subsidy level h)
         'lam_F9_2': 1e4,   # Big-M for dual variable of constraint F9_2 (linking co-processing quantity to subsidy level h)
         'lam_F9_3': 1e4,   # Big-M for dual variable of constraint F9_3 (linking co-processing quantity to subsidy level h)
-        'pi_q_cw': 1e4,    # Big-M for dual variable of constraint limiting quantity of waste processed at cement plant
         # derived from stationarity for q_cf: data.price_f[f] - lam_F3[c]*data.beta_f[f] - pi_q_cf[c,f] == 0 with lam_F3 >= 0 and beta_f >= 8, so price_f is a reasonable upper bound for pi_q_cf
         'pi_q_cf': max(price_f)+1,    # Big-M for dual variable of constraint limiting quantity of coal processed at cement plant
         'pi_q_scw': 1e4,   # Big-M for dual variable of constraint limiting quantity of waste allocated from transfer station to cement plant

@@ -13,8 +13,6 @@ K_max = 2        # Number of Pre and Co-processing capacities
 F_max = 1        # Number of Coal types as conservative fuel
 H_max = 5        # Number of Subsidy levels
 
-J_max = 0        # Number of KKT conditions for fixed investment decision solutions of lower level problem (for cut generation)
-
 G = range(G_max) # Set of Generation spots
 S = range(S_max) # Set of Transfer stations
 W = range(W_max) # Set of Waste types
@@ -24,8 +22,6 @@ C = range(C_max) # Set of Cement facilities
 K = range(K_max) # Set of Pre and Co-processing capacities
 F = range(F_max) # Set of Coal types as conservative fuel
 H = range(H_max) # Set of Subsidy levels
-
-J = range(J_max) # Set of KKT conditions for fixed investment decision solutions of lower level problem (for cut generation)
 
 ############ Parameters ############
 #### Leader - Municipality ####
@@ -113,3 +109,5 @@ M_dual = {
     'pi_r_sw': 10**6,    # Big-M for dual variable of constraint limiting residual waste at transfer station after allocation
     'pi_y_cwh': 10**6    # Big-M for dual variable of constraint linking subsidy level to co-processing quantity
 }
+
+U_w = [min(sum(Q_gw[g][w] for g in G), Q_k_max*len(C)) for w in W]  # Upper bound on waste flow of type w (can be tightened based on data)

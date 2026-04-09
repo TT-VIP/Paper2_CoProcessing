@@ -18,6 +18,7 @@ class SubProblem2Solution:
     q_cf: Dict[Tuple[int, int], float] | None          # Quantity of coal f processed at cement plant c
     r_sw: Dict[Tuple[int, int], float] | None          # Residual waste w at transfer station s after allocation (not utilized by cement plants)
     q_scw: Dict[Tuple[int, int, int], float] | None    # Quantity of waste w from transfer station s to cement plant c
+    objective_components: dict[str, float] | None      # Optional dictionary to hold the components of the follower objective function for posterior analysis (e.g., coal cost, investment cost, subsidy revenue, etc.)
 
 class SubProblem2:
     '''
@@ -118,7 +119,24 @@ class SubProblem2:
         self.model.Params.SolutionLimit = 1  # Stop after finding the first feasible solution (if any)
         # self.model.NoRelHeurTime = 300  # Heuristic to find feasible solutions (if any) for up to 5 minutes
 
-    def extract_solution(self) -> None:
+    def get_objective_components(self) -> dict[str, float]:
+        '''Evaluate objective components at current incubent solution for posterior analysis'''
+        if self.model is None:
+            raise RuntimeError("Model is not built yet. Call build() before getting objective components.")
+        elif self.model.SolCount == 0:
+            raise RuntimeError("SP2 is infeasible / has no solution at the limited iterations. Cannot get objective components.")
+        
+        return {
+            "Coal cost": float(self.obj_cost_coal.getValue()),
+            "Investment cost": float(self.obj_cost_invest.getValue()),
+            "Pre-processing cost": float(self.obj_cost_preproc.getValue()),
+            "Penalty cost": float(self.obj_cost_penalty.getValue()),
+            "Tie-breaking cost": float(self.obj_cost_tiebreak.getValue()),
+            "Subsidies received": float(self.obj_revenue_subsidy.getValue()),
+            "Objective value": float(self.obj_total_follower.getValue())
+        }
+    
+    def extract_solution(self) -> SubProblem2Solution:
         data = self.instance
         is_feasible = self.model.status in [GRB.OPTIMAL, GRB.SUBOPTIMAL]
         is_time_limit_reached = self.model.status == GRB.TIME_LIMIT
@@ -128,23 +146,28 @@ class SubProblem2:
                 logging.info('✓ Subproblem 2 solved optimally.')
             else:
                 logging.info('⚠ Subproblem 2 solved suboptimally.')
+            
+            fol_obj_components = self.get_objective_components()
             return SubProblem2Solution(
                 feasible=True,
                 sp2_obj=self.model.ObjVal,
                 x_ck = {(c,k): int(round(self.x_ck[c, k].X)) for c in data.C for k in data.K},       # rounding because of floating-point relaxation within gurobi (0.9999997 or 1.0000002 possible)
                 q_cf = {(c,f): self.q_cf[c, f].X for c in data.C for f in data.F},
                 r_sw = {(s,w): self.r_sw[s, w].X for s in data.S for w in data.W},
-                q_scw = {(s,c,w): self.q_scw[s, c, w].X for s in data.S for c in data.C for w in data.W}
+                q_scw = {(s,c,w): self.q_scw[s, c, w].X for s in data.S for c in data.C for w in data.W},
+                objective_components = fol_obj_components
             )
         elif is_time_limit_reached and self.model.SolCount > 0:
             logging.info('⚠ Subproblem 2 solve time limit reached. Best solution found will be extracted.')
+            fol_obj_components = self.get_objective_components()
             return SubProblem2Solution(
                 feasible=True,
                 sp2_obj=self.model.ObjVal,
                 x_ck = {(c,k): int(round(self.x_ck[c, k].X)) for c in data.C for k in data.K},       # rounding because of floating-point relaxation within gurobi (0.9999997 or 1.0000002 possible)
                 q_cf = {(c,f): self.q_cf[c, f].X for c in data.C for f in data.F},
                 r_sw = {(s,w): self.r_sw[s, w].X for s in data.S for w in data.W},
-                q_scw = {(s,c,w): self.q_scw[s, c, w].X for s in data.S for c in data.C for w in data.W}
+                q_scw = {(s,c,w): self.q_scw[s, c, w].X for s in data.S for c in data.C for w in data.W},
+                objective_components = fol_obj_components
             )
         else:       # alternative: just 'return None' and check in decomposition algorithm 'if: sp2_sol = None'
             logging.info('✗ Subproblem 2 is infeasible.')
@@ -154,7 +177,8 @@ class SubProblem2:
                 x_ck=None,
                 q_cf=None,
                 r_sw=None,
-                q_scw=None
+                q_scw=None,
+                objective_components=None
             )
 
     def _add_variables(self) -> None:
@@ -284,23 +308,7 @@ class SubProblem2:
         self.obj_total_follower = self.obj_cost_coal + self.obj_cost_invest + self.obj_cost_preproc + self.obj_cost_penalty + self.obj_cost_tiebreak - self.obj_revenue_subsidy
         #endregion
 
-    def get_objective_components(self):
-        '''Evaluate objective components at current incubent solution for posterior analysis'''
-        if self.model is None:
-            raise RuntimeError("Model is not built yet. Call build() before getting objective components.")
-        elif self.model.SolCount == 0:
-            raise RuntimeError("SP2 is infeasible / has no solution at the limited iterations. Cannot get objective components.")
-        
-        return {
-            "Coal cost": self.obj_cost_coal.getValue(),
-            "Investment cost": self.obj_cost_invest.getValue(),
-            "Pre-processing cost": self.obj_cost_preproc.getValue(),
-            "Penalty cost": self.obj_cost_penalty.getValue(),
-            "Tie-breaking cost": self.obj_cost_tiebreak.getValue(),
-            "Subsidies received": self.obj_revenue_subsidy.getValue(),
-            "Objective value": self.obj_total_follower.getValue()
-        }
-
+    #region Objective function
     def _set_objective(self) -> None:
         '''
         Set objective function for SP2 (can be zero if only feasibility check, but for Yue logic equals leader objective
@@ -358,3 +366,4 @@ class SubProblem2:
             data.weight_mon*(cost_transport + cost_treatment + cost_subsidy),
             # data.weight_mon*(cost_transport + cost_treatment),
             GRB.MINIMIZE)
+    #endregion
