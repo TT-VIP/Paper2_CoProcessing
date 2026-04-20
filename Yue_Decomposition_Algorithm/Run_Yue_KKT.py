@@ -16,7 +16,8 @@ from Instances.shanghai_instance_effective import make_shanghai_instance_effecti
 def setup_logger() -> None:
     """Setup logging to file and console"""
     # Create solutions folder if it doesn't exist
-    log_dir = Path(__file__).parent / "solutions"
+    # log_dir = Path(__file__).parent / "solutions"
+    log_dir = Path(__file__) / "solutions"
     log_dir.mkdir(exist_ok=True)
     
     # Create log filename with date and time
