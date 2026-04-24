@@ -5,14 +5,13 @@ from pathlib import Path
 import math
 import gurobipy as gp
 
-from instance_loader import InstanceData
-from MP_KKT_degeneracy import MasterProblem
-# from MP_KKT import MasterProblem
-# from MP_KKT_SOS1 import MasterProblem
-from SP1 import SubProblem1
-from SP2 import SubProblem2
-from shanghai_instance import make_shanghai_instance
-from shanghai_instance_scaled import make_shanghai_instance_scaled
+from Instances.instance_loader import InstanceData
+from .MP_KKT_ModelReformulation_Multi import MasterProblem
+from .SP1_ModelReformulation import SubProblem1
+from .SP2_ModelReformulation import SubProblem2
+# from shanghai_instance import make_shanghai_instance
+# from Instances.shanghai_instance_scaled import make_shanghai_instance_scaled
+from Instances.shanghai_instance_effective import make_shanghai_instance_effective
 
 
 def setup_logger() -> None:
@@ -86,55 +85,25 @@ def log_bigM_binding(mp: MasterProblem, data: InstanceData, *, tol_ratio: float 
 
         # === F3 (b = sum q_cf*beta_f + sum q_cw*beta_w - alpha) >= 0
         for c in data.C:
-            bF3 = sum(float(oc.q_cf[c, f].X) * data.beta_f[f] for f in data.F) + sum(float(oc.q_cw[c, w].X) * data.beta_w[w] for w in data.W) - data.alpha_c[c]
+            bF3 = sum(float(oc.q_cf[c, f].X) * data.beta_f[f] for f in data.F) + sum(float(oc.q_scw[s, c, w].X) * data.beta_w[w] for s in data.S for w in data.W) - data.alpha_c[c]
             check_dual_cap(f"OC{l}.F3[c={c}]", oc.lam_F3[c], oc.bin_F3[c], "lam_F3")
             check_primal_cap(f"OC{l}.F3[c={c}]", bF3, oc.bin_F3[c], "F3")
 
         # === F4 (b = kappa*alpha - sum q_cw*beta_w) >= 0
         for c in data.C:
-            bF4 = data.kappa_coproc * data.alpha_c[c] - sum(float(oc.q_cw[c, w].X) * data.beta_w[w] for w in data.W)
+            bF4 = data.kappa_coproc * data.alpha_c[c] - sum(float(oc.q_scw[s, c, w].X) * data.beta_w[w] for s in data.S for w in data.W)
             check_dual_cap(f"OC{l}.F4[c={c}]", oc.lam_F4[c], oc.bin_F4[c], "lam_F4")
             check_primal_cap(f"OC{l}.F4[c={c}]", bF4, oc.bin_F4[c], "F4")
 
         # === F5 (b = cap - sum q_cw) >= 0
         for c in data.C:
             cap = sum(oc.x_ck_fixed[(c, k)] * data.Q_k[k] for k in data.K)
-            bF5 = cap - sum(float(oc.q_cw[c, w].X) for w in data.W)
+            bF5 = cap - sum(float(oc.q_scw[s, c, w].X) for s in data.S for w in data.W)
             check_dual_cap(f"OC{l}.F5[c={c}]", oc.lam_F5[c], oc.bin_F5[c], "lam_F5")
             check_primal_cap(f"OC{l}.F5[c={c}]", bF5, oc.bin_F5[c], "F5")
 
-        # === F9.1 (b = z*Qmax - y) >= 0
-        for c in data.C:
-            for w in data.W:
-                for h in data.H:
-                    b91 = z_val[(w, h)] * data.Q_k_max - float(oc.y_cwh[c, w, h].X)
-                    check_dual_cap(f"OC{l}.F9_1[{c},{w},{h}]", oc.lam_F9_1[c, w, h], oc.bin_F9_1[c, w, h], "lam_F9_1")
-                    check_primal_cap(f"OC{l}.F9_1[{c},{w},{h}]", b91, oc.bin_F9_1[c, w, h], "F9_1")
-
-        # === F9.2 (b = q_cw - y) >= 0
-        for c in data.C:
-            for w in data.W:
-                for h in data.H:
-                    b92 = float(oc.q_cw[c, w].X) - float(oc.y_cwh[c, w, h].X)
-                    check_dual_cap(f"OC{l}.F9_2[{c},{w},{h}]", oc.lam_F9_2[c, w, h], oc.bin_F9_2[c, w, h], "lam_F9_2")
-                    check_primal_cap(f"OC{l}.F9_2[{c},{w},{h}]", b92, oc.bin_F9_2[c, w, h], "F9_2")
-
-        # === F9.3 (b = y - q_cw + Qmax*(1-z)) >= 0
-        for c in data.C:
-            for w in data.W:
-                for h in data.H:
-                    b93 = float(oc.y_cwh[c, w, h].X) - float(oc.q_cw[c, w].X) + data.Q_k_max * (1 - z_val[(w, h)])
-                    check_dual_cap(f"OC{l}.F9_3[{c},{w},{h}]", oc.lam_F9_3[c, w, h], oc.bin_F9_3[c, w, h], "lam_F9_3")
-                    check_primal_cap(f"OC{l}.F9_3[{c},{w},{h}]", b93, oc.bin_F9_3[c, w, h], "F9_3")
-
         # === Bound complementarity examples: pi_q_cw <= M*pi * bin, and q_cw <= M*q * (1-bin)
         # Here b = q itself (>=0)
-        for c in data.C:
-            for w in data.W:
-                check_dual_cap(f"OC{l}.pi_q_cw[{c},{w}]", oc.pi_q_cw[c, w], oc.bin_q_cw[c, w], "pi_q_cw")
-                q = float(oc.q_cw[c, w].X)
-                check_primal_cap(f"OC{l}.q_cw[{c},{w}]", q, oc.bin_q_cw[c, w], "q_cw")
-
         for c in data.C:
             for f in data.F:
                 check_dual_cap(f"OC{l}.pi_q_cf[{c},{f}]", oc.pi_q_cf[c, f], oc.bin_q_cf[c, f], "pi_q_cf")
@@ -154,13 +123,6 @@ def log_bigM_binding(mp: MasterProblem, data: InstanceData, *, tol_ratio: float 
                 r = float(oc.r_sw[s, w].X)
                 check_primal_cap(f"OC{l}.r_sw[{s},{w}]", r, oc.bin_r_sw[s, w], "r_sw")
 
-        for c in data.C:
-            for w in data.W:
-                for h in data.H:
-                    check_dual_cap(f"OC{l}.pi_y_cwh[{c},{w},{h}]", oc.pi_y_cwh[c, w, h], oc.bin_y_cwh[c, w, h], "pi_y_cwh")
-                    y = float(oc.y_cwh[c, w, h].X)
-                    check_primal_cap(f"OC{l}.y_cwh[{c},{w},{h}]", y, oc.bin_y_cwh[c, w, h], "y_cwh")
-    
 
         if dual_hits or primal_hits:
             logging.info(f"[BigM] OC block l={l}: dual_hits={len(dual_hits)}, primal_hits={len(primal_hits)}")
@@ -176,15 +138,30 @@ def pattern_key(x_ck_fixed: dict) -> tuple:
     # sort to be deterministic
     return tuple(sorted((c, k, int(round(v))) for (c, k), v in x_ck_fixed.items()))
 
+def log_nonzero_gurobi_vars(model: gp.Model, model_name: str, tol: float = 1e-4, var_names_to_log: list = None) -> None:
+    """Log all nonzero variable values of a solved Gurobi model."""
+    logging.info(f"Objective value: {model.ObjVal:.4f}")
+
+    logging.info(f"\nNonzero variables in {model_name} (|x| > {tol}):")
+    count = 0
+    for v in model.getVars():
+        val = v.X
+        if abs(val) > tol:
+            # If filter list provided, only log if variable name starts with one of the filters
+            if var_names_to_log is not None and not any(v.VarName.startswith(name) for name in var_names_to_log):
+                    continue
+            logging.info(f"  {v.VarName} = {val:.10g}")
+            count += 1
+
 def main(Verbose: bool = True) -> None:
-    solver_time_limit = 300     # seconds per solve (MP, SP1, SP2)
+    solver_time_limit = 500     # seconds per solve (MP, SP1, SP2)
     solver_time_limit_sp2 = 1800  # longer time limit for SP2 due to feasibility check necessity
     Xi = 10                     # termination tolerance (UB - LB <= Xi)
-    max_iterations = 3         # maximum number of iterations
+    max_iterations = 4         # maximum number of iterations
     # Verbose = True              # enable detailed output
 
     # Load instance data
-    shanghai_data = make_shanghai_instance_scaled()
+    shanghai_data = make_shanghai_instance_effective()
 
     # Starting Configuration
     LB = -np.inf
@@ -197,6 +174,7 @@ def main(Verbose: bool = True) -> None:
 
     best_mp_sol = None
     best_sp2_sol = None
+    last_sp2_model = None  # to store the last SP2 model for potential post-analysis
 
     generated_patterns_kkt_blocks = set()  # to track which patterns have had KKT OC blocks added, to avoid duplicates
 
@@ -216,22 +194,32 @@ def main(Verbose: bool = True) -> None:
         else:
             mp.model.Params.MIPFocus = 0  # Default focus
             # mp.solve(time_limit=solver_time_limit)
-            mp.model.Params.MIPGap = 0.02
-            mp.solve()
+            # mp.model.Params.MIPGap = 0.02
+            mp.solve(time_limit=solver_time_limit)
         if mp.model.SolCount == 0:
             logging.info("No solution found for Master Problem. Terminating.")
             break
         
         # LB update
         prev_LB = LB
-        try:
-            new_LB = mp.model.ObjBound  # Update LB with the best bound from MP
-        except Exception:
-            new_LB = mp.model.ObjVal  # Fallback to MP solution objective if bound is not available
+        if mp.model.NumObj > 1:
+            mp.model.params.ObjNumber = 0  # If a second objective exists (e.g. for stabilization), switch to it for bound
+            try:
+                new_LB = mp.model.ObjPassNObjBound  # Update LB with the best bound from MP
+                logging.info(f"Best Master Problem Solution: Objective = {mp.model.ObjPassNObjVal:.2f}, Bound = {mp.model.ObjPassNObjBound:.2f}")
+            except Exception:
+                new_LB = mp.model.ObjPassNObjVal  # Fallback to MP solution objective if bound is not available
+                logging.info(f"Best Master Problem Solution: Objective = {mp.model.ObjPassNObjVal:.2f} (bound not available)")
+        else:
+            try:
+                new_LB = mp.model.ObjBound  # Update LB with the best bound from MP
+                logging.info(f"Best Master Problem Solution: Objective = {mp.model.ObjVal:.2f}, Bound = {mp.model.ObjBound:.2f}")
+            except Exception:
+                new_LB = mp.model.ObjVal  # Fallback to MP solution objective if bound is not available
+                logging.info(f"Best Master Problem Solution: Objective = {mp.model.ObjVal:.2f} (bound not available)")
         LB = max(LB, new_LB)  # Ensure LB does not decrease
         
         # solution logging
-        logging.info(f"Best Master Problem Solution: Objective = {mp.model.ObjVal:.2f}, Bound = {mp.model.ObjBound:.2f}")
         if new_LB > prev_LB:
             logging.info(f"New LB found. LB updated from {prev_LB:.2f} to {new_LB:.2f}")
         else:
@@ -243,7 +231,7 @@ def main(Verbose: bool = True) -> None:
 
         # Solve Subproblem 1 at leader solution (Follower Optimality)
         sp1 = SubProblem1(shanghai_data)
-        sp1.build(mp_sol, output_flag=1)
+        sp1.build(mp_sol, name=f"Subproblem 1 - Iteration {iteration}", output_flag=1)
         sp1.solve(time_limit=solver_time_limit)
         sp1_sol = sp1.extract_solution()
         logging.info(f"Subproblem 1 Solution: {sp1_sol.sp1_obj:.2f}")
@@ -252,9 +240,10 @@ def main(Verbose: bool = True) -> None:
 
         # Solve Subproblem 2 (Bilevel Feasibility) at leader solution and SP1 follower solution
         sp2 = SubProblem2(shanghai_data)
-        sp2.build(mp_sol, sp1_sol, output_flag=1)
+        sp2.build(mp_sol, sp1_sol, name=f"Subproblem 2 - Iteration {iteration}", output_flag=1)
         sp2.solve(time_limit=solver_time_limit_sp2)
         sp2_sol = sp2.extract_solution()
+        last_sp2_model = sp2.model  # Store the last SP2 model for potential post-analysis
 
         if sp2_sol.feasible:
             # Update upper bound and best solutions if better
@@ -267,11 +256,23 @@ def main(Verbose: bool = True) -> None:
             else:
                 logging.info(f"Subproblem 2 feasible but no improvement. Upper Bound remains unchanged: UB = {UB:.2f}")
                 logging.info(f'Binary combination in SP2: x_ck = {sp2_sol.x_ck}')
+            
+            # Check convergence before adding cut
+            if UB - LB <= Xi:
+                logging.info(f"Convergence achieved: UB - LB = {UB - LB:.2f} <= Xi = {Xi}")
+                logging.info("Terminating decomposition loop without adding new OC block.")
+                break
+            if iteration == max_iterations:
+                logging.info(f"Maximum iterations reached: {iteration}. Terminating decomposition loop without adding new OC block.")
+                break
+            
             # check if x_ck KKT pattern has already had a KKT OC block added; if so, skip adding another to force diversification in future iterations
             key = pattern_key(sp2_sol.x_ck)
             if key in generated_patterns_kkt_blocks:
-                logging.info("Duplicate x_ck pattern from SP2 encountered. Skipping OC block and forcing diversification.")
-                mp._add_no_good_cut(sp2_sol.x_ck)  # Add no-good cut to forbid this exact x_ck pattern in future iterations
+                logging.info("ATTENTION: Duplicate x_ck pattern from SP2 encountered. OC block will be duplicated without improvement.")
+                mp._add_kkt_oc_block(sp2_sol.x_ck)  # Still add the OC block to cut off current solution, but log the duplication
+                # logging.info("Duplicate x_ck pattern from SP2 encountered. Skipping OC block and forcing diversification.")
+                # mp._add_no_good_cut(sp2_sol.x_ck)  # Add no-good cut to forbid this exact x_ck pattern in future iterations
             else:
                 generated_patterns_kkt_blocks.add(key)
                 # Add KKT Optimality Cut to MP based on SP2 solution
@@ -282,8 +283,10 @@ def main(Verbose: bool = True) -> None:
             logging.info("Subproblem 2 is infeasible -> Upper bound remains unchanged.")
             key = pattern_key(sp1_sol.x_ck)
             if key in generated_patterns_kkt_blocks:
-                logging.info("Duplicate x_ck pattern from SP1 encountered. Skipping OC block and forcing diversification.")
-                mp._add_no_good_cut(sp1_sol.x_ck)  # Add no-good cut to forbid this exact x_ck pattern in future iterations
+                logging.info("ATTENTION: Duplicate x_ck pattern from SP1 encountered. OC block will be duplicated without improvement.")
+                mp._add_kkt_oc_block(sp1_sol.x_ck)  # Still add the OC block to cut off current solution, but log the duplication
+                # logging.info("Duplicate x_ck pattern from SP1 encountered. Skipping OC block and forcing diversification.")
+                # mp._add_no_good_cut(sp1_sol.x_ck)  # Add no-good cut to forbid this exact x_ck pattern in future iterations
             else:
                 generated_patterns_kkt_blocks.add(key)
                 # Add KKT Optimality Cut to MP based on SP1 solution
@@ -296,22 +299,102 @@ def main(Verbose: bool = True) -> None:
             logging.info("\n" + "-"*70)
             logging.info(f"End of Iteration {iteration} Summary:")
             logging.info(f"  LB = {LB:.2f}, UB = {UB:.2f}, Gap = {(UB - LB):.2f}, Cut added from {'SP2' if sp2_sol.feasible else 'SP1'}")
+            logging.info(f"The KKT OC block was added based on x_ck pattern: {sp2_sol.x_ck if sp2_sol.feasible else sp1_sol.x_ck}")
+            # logging.info(f"The KKT OC block was added based on x_ck pattern: {key}")
             logging.info("-"*70)
+    
     # Final Solution Summary
+    def _nonzero_items(d: dict, tol: float = 1e-6):
+        return [(k, v) for k, v in d.items() if abs(float(v)) > tol]
+
+    def _log_dict(name: str, d: dict, tol: float = 1e-6) -> None:
+        nz = _nonzero_items(d, tol)
+        logging.info(f"• {name}: {len(nz)} nonzero")
+        for k, v in sorted(nz):
+            logging.info(f"    {name}{k} = {float(v):.10g}")
+
+    def log_compact_best_solution(best_mp_sol, best_sp2_sol, tol: float = 1e-6) -> None:
+        logging.info("\n" + "#"*70)
+        logging.info("Best Solution found (nonzero relevant vars only, no duals):")
+        logging.info("" + "#"*70)
+
+        logging.info("\nMunicipality [Leader]")
+        logging.info("" + "-"*70)
+        logging.info(f"Objective value: {best_mp_sol.mp_obj:.2f}")
+        leader_dict_vars = ["q_gsw", "q_slw", "q_siw", "z_wh", "y_wh"]
+        leader_scalar_vars = ["mu_land", "mu_inc", "mu_kiln"]
+
+        logging.info(f"\nNonzero variables in Leader Problem (|x| > {tol}):")
+
+        for name in leader_dict_vars:
+            _log_dict(name, getattr(best_mp_sol, name))
+
+        for name in leader_scalar_vars:
+            val = float(getattr(best_mp_sol, name))
+            if abs(val) > tol:
+                logging.info(f"{name} = {val:.10g}")
+
+        logging.info("\nCement Producer [Follower]")
+        logging.info("" + "-"*70)
+        logging.info(f"Objective value: {last_sp2_model.ObjVal:.2f}")
+        follower_dict_vars = ["x_ck", "q_cf", "r_sw", "q_scw"]
+        logging.info(f"\nNonzero variables in Follower Problem (|x| > {tol}):")
+        for name in follower_dict_vars:
+            _log_dict(name, getattr(best_sp2_sol, name))
+    
     logging.info("\n" + "#"*70)
     logging.info("Finished Yue-KKT Decomposition run.")
     logging.info(f"Iterations {iteration}")
     logging.info(f"Final LB = {LB:.2f}")
     logging.info(f"Final UB = {UB:.2f}")
     logging.info(f"Final Gap = {(UB - LB):.2f} (tolerance Xi = {Xi})")
+    logging.info(f"Cutted patterns: {generated_patterns_kkt_blocks}")
     if best_mp_sol is not None and best_sp2_sol is not None:
-        logging.info("\nBest Solution found:")
-        logging.info("Master Problem Solution (Leader Decisions):")
-        logging.info(best_mp_sol)
-        logging.info("\nSubproblem 2 Solution (Follower Reaction):")
-        logging.info(best_sp2_sol)
+        # logging.info("\nBest Solution found:")
+        # logging.info("Master Problem Solution (Leader Decisions):")
+        # logging.info(best_mp_sol)
+        # logging.info("\nSubproblem 2 Solution (Follower Reaction):")
+        # logging.info(best_sp2_sol)
+
+        log_compact_best_solution(best_mp_sol, best_sp2_sol)
     else:
         logging.info("No feasible solution found during the decomposition process.")
+    
+    # Print all nonzero decision variables from final solved models
+    leader_vars = ["q_gsw", "q_slw", "q_siw", "mu_land", "mu_inc", "mu_kiln", "z_wh", "y_wh"]
+    follower_vars = ["x_ck", "q_cf", "r_sw", "q_scw"]
+    if mp.model.SolCount > 0:
+        logging.info("\n" + "#"*70)
+        logging.info("Best Solution found (nonzero relevant vars only, no duals):")
+        logging.info("" + "#"*70)
+
+        logging.info("\nMunicipality [Leader]")
+        logging.info("" + "-"*70)
+
+        leader_obj_values = mp.get_objective_breakdown()
+        logging.info("\nObjective breakdown:\n")
+        # key column width for alignment
+        key_width_leader=max(len(k) for k in leader_obj_values.keys()) + 2
+        for index, (k, v) in enumerate(leader_obj_values.items(), start=1):
+            logging.info(f"{k:<{key_width_leader}} {v:>14.6f}")
+            if index in (5,10):  # Add extra spacing after transport and treatment costs for readability
+                logging.info("")
+
+        log_nonzero_gurobi_vars(mp.model, "Leader Problem [Municipality]", var_names_to_log=leader_vars)
+    
+    if last_sp2_model is not None and last_sp2_model.SolCount > 0:
+        logging.info("\n\nCement Producer [Follower]")
+        logging.info("" + "-"*70)
+
+        follower_obj_values = sp2.get_objective_components()
+        logging.info("\nObjective breakdown:\n")
+        key_width_follower = max(len(k) for k in follower_obj_values.keys()) + 2
+        for index, (k, v) in enumerate(follower_obj_values.items(), start=1):
+            logging.info(f"{k:<{key_width_follower}} {v:>14.6f}")
+            if index == 6:
+                logging.info("")
+
+        log_nonzero_gurobi_vars(last_sp2_model, "Follower Problem [Cement Producer]", var_names_to_log=follower_vars)
 
 
 if __name__ == "__main__":
