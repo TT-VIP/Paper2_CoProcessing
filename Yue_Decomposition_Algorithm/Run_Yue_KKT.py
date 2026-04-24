@@ -10,14 +10,17 @@ if str(ROOT) not in sys.path:
 
 # from Yue_KKT_Decomp_New.Yue_KKT_Decomp_ModelReformulation_Multi import main
 # from Yue_KKT_Decomp_New.Yue_KKT_Decomp_ModelReformulation import main
-from Yue_KKT_Decomp_New.Yue_KKT_Decomp_ModelReformulation_copy import main
+# from Yue_KKT_Decomp_New.Yue_KKT_Decomp_ModelReformulation_copy import main
+
+from Yue_KKT_Decomp_reworked.Yue_KKT_reworked import main
+# from Yue_KKT_Decomp_reworked.Yue_KKT_reworked_Multi import main
 from Instances.shanghai_instance_effective import make_shanghai_instance_effective
 
 def setup_logger() -> None:
     """Setup logging to file and console"""
     # Create solutions folder if it doesn't exist
     # log_dir = Path(__file__).parent / "solutions"
-    log_dir = Path(__file__) / "solutions"
+    log_dir = Path(__file__).parent / "Yue_KKT_Decomp_reworked" / "solutions"
     log_dir.mkdir(exist_ok=True)
     
     # Create log filename with date and time
@@ -41,9 +44,10 @@ if __name__ == "__main__":
     log_path = setup_logger()
     logging.info(f"Yue-KKT Decomposition Algorithm started. Logs will be saved to {log_path}")
 
-    solver_time_limit = 500     # Time limit for solving MP and SPs (in seconds)
+    solver_time_limit = 1000     # Time limit for solving MP and SPs (in seconds)
+    master_mip_gap = 0.01        # MIP gap for the master problem
     Xi = 1e-1                   # Convergence threshold for leader objective improvement
     max_iterations = 4          # Maximum number of iterations to prevent infinite loops
     instance = make_shanghai_instance_effective()  # Load instance data (can be replaced with other instances)
 
-    main(Verbose=True, solver_time_limit=solver_time_limit, Xi=Xi, max_iterations=max_iterations, instance=instance)
+    main(Verbose=True, solver_time_limit=solver_time_limit, master_mip_gap=master_mip_gap, Xi=Xi, max_iterations=max_iterations, instance=instance)

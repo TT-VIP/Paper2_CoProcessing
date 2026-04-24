@@ -133,7 +133,7 @@ class SubProblem2:
             "Investment cost": float(self.obj_cost_invest.getValue()),
             "Pre-processing cost": float(self.obj_cost_preproc.getValue()),
             "Penalty cost": float(self.obj_cost_penalty.getValue()),
-            "Tie-breaking cost": float(self.obj_cost_transport.getValue()),
+            "Transportation cost": float(self.obj_cost_transport.getValue()),
             "Subsidies received": float(self.obj_revenue_subsidy.getValue()),
             "Objective value": float(self.obj_total_follower.getValue())
         }

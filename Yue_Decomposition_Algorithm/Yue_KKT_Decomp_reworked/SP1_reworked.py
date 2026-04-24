@@ -196,10 +196,10 @@ class SubProblem1:
         cost_preproc = gp.quicksum(data.c_preproc_w[w]*self.q_scw[s,c,w] for s in data.S for c in data.C for w in data.W)
         # 4) Penalty cost
         cost_penalty = data.c_penalty*gp.quicksum(self.r_sw[s,w] for s in data.S for w in data.W)
-        # 5) Small tie-breaking cost to avoid symmetries
-        cost_tiebreak = data.tau*gp.quicksum(self.q_scw[s,c,w]*data.TD_sc[s][c] for s in data.S for c in data.C for w in data.W)
+        # 5) Transportation cost
+        cost_transport = data.c_truck*gp.quicksum(self.q_scw[s,c,w]*data.TD_sc[s][c] for s in data.S for c in data.C for w in data.W)
         # 6) Subsidy revenue
         revenue_subsidy = gp.quicksum(self.q_scw[s,c,w]*gp.quicksum(data.phi_wh[w][h]*self.z_wh[w,h] for h in data.H) for s in data.S for c in data.C for w in data.W)
 
-        # Objective: Minimize Costs = Coal cost + Investment cost + Pre-processing cost + Penalty cost + Tie-breaking cost - Subsidy revenue
-        m.setObjective(cost_coal + cost_invest + cost_preproc + cost_penalty + cost_tiebreak - revenue_subsidy, GRB.MINIMIZE)
+        # Objective: Minimize Costs = Coal cost + Investment cost + Pre-processing cost + Penalty cost + Transportation cost - Subsidy revenue
+        m.setObjective(cost_coal + cost_invest + cost_preproc + cost_penalty + cost_transport - revenue_subsidy, GRB.MINIMIZE)

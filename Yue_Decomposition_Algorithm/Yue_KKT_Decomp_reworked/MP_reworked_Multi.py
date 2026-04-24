@@ -104,6 +104,7 @@ class MasterProblem:
         self.kkt_oc_blocks: Dict[int, KKTOCBlock] = {}  # Dictionary to store KKT optimality cut blocks by iteration index l
         self._kkt_oc_counter = 0  # Counter to assign unique indices to KKT optimality cut blocks
         self.no_good_cut_counter = 0  # Counter to assign unique indices to no-good cuts for duplicate patterns
+        self._kkt_duals = []  # List to store dual variable values from the follower problem for each cut (for posterior analysis and debugging)
 
         # Variable Containers (filled in build())
         # Leader
@@ -195,12 +196,27 @@ class MasterProblem:
         self.model.optimize()
     #endregion
 
+    def _get_primary_obj_value_and_bound(self) -> tuple[float, float]:
+        """Helper function to extract incmbent and bound for single-objective and multi-objective runs alike"""
+        if self.model is None or self.model.SolCount == 0:
+            raise RuntimeError("No MP solution available.")
+        
+        if not self.model.NumObj > 1:
+            return self.model.ObjVal, self.model.ObjBound
+        else:
+            self.model.Params.ObjNumber = 0  # Ensure we are looking at the correct objective (in case of multi-objective setup with lexicographic hierarchy)
+            obj_val = float(self.model.ObjPassNObjVal)
+            obj_bound = float(self.model.ObjPassNObjBound)
+            return obj_val, obj_bound
+    
     #region Method for objective breakdown
     def get_objective_breakdown(self) -> Dict[str, float]:
         """Evaluate objective components at current incumbent."""
         if self.model is None or self.model.SolCount == 0:
             raise RuntimeError("No MP solution available.")
 
+        objective_value, _ = self._get_primary_obj_value_and_bound()
+            
         return {
             "Transport emissions": float(self.obj_emission_transport.getValue()),
             "Treatment emissions": float(self.obj_emission_treatment.getValue()),
@@ -212,7 +228,7 @@ class MasterProblem:
             "Subsidy cost": float(self.obj_cost_subsidy.getValue()),
             "Total costs (unweighted)": float(self.obj_total_mon.getValue()),
             f"Total costs (weighted {self.instance.weight_mon:.3f})": float(self.obj_total_mon_weighted.getValue()),
-            "Objective value (weighted sum)": float(self.model.ObjVal),
+            "Objective value (weighted sum)": float(objective_value),
         }
     #endregion
 
@@ -231,9 +247,11 @@ class MasterProblem:
         data = self.instance
         lead_obj_components = self.get_objective_breakdown()  # Get objective components for posterior analysis
 
+        objective_value, objective_bound = self._get_primary_obj_value_and_bound()
+
         return MasterSolution(
-            mp_obj = self.model.ObjVal,
-            mp_bound = self.model.ObjBound,
+            mp_obj = objective_value,
+            mp_bound = objective_bound,
             q_gsw = {(g, s, w): self.q_gsw[g, s, w].X for g in data.G for s in data.S for w in data.W},
             q_slw = {(s, l, w): self.q_slw[s, l, w].X for s in data.S for l in data.L for w in data.W},
             q_siw = {(s, i, w): self.q_siw[s, i, w].X for s in data.S for i in data.I for w in data.W},
@@ -502,6 +520,18 @@ class MasterProblem:
         self.obj_total_mon_weighted = data.weight_mon * self.obj_total_mon
     #endregion
 
+    def _set_lexicographic_objective_multiobject_hierarchy(self) -> None:
+        """
+        Primary objective: leader objective
+        Secondary objective: minimize sum of KKT duals
+        """
+        m = self.model
+        primary = m.getObjective()
+        m.setObjectiveN(primary, index=0, priority=2, name="LeaderObj")
+
+        secondary = gp.quicksum(v for td in self._kkt_duals for v in td.values())
+        m.setObjectiveN(secondary, index=1, priority=1, name="DualStabilization")
+
     # (later) Method to add Benders cut (after solving SP2)
     # region Method add optimality KKT-cut (after solving SP2)
     def _add_kkt_oc_block(self, x_ck_fixed: Dict[Tuple[int, int], int]) -> int:
@@ -536,6 +566,8 @@ class MasterProblem:
         pi_q_cf = m.addVars(data.C, data.F, lb=0.0, vtype=GRB.CONTINUOUS, name=f"{pfx}_pi_q_cf")
         pi_q_scw = m.addVars(data.S, data.C, data.W, lb=0.0, vtype=GRB.CONTINUOUS, name=f"{pfx}_pi_q_scw")
         pi_r_sw = m.addVars(data.S, data.W, lb=0.0, vtype=GRB.CONTINUOUS, name=f"{pfx}_pi_r_sw")
+
+        self._kkt_duals.extend([lam_F3, lam_F4, lam_F5, pi_q_cf, pi_q_scw, pi_r_sw])
 
         # 3) Complementarity binaries for this cut block
         bin_F3 = m.addVars(data.C, vtype=GRB.BINARY, name=f"{pfx}_bin_F3")
@@ -773,6 +805,7 @@ class MasterProblem:
         self.kkt_oc_blocks[kkt_oc_block.l] = kkt_oc_block
 
         m.update()
+        self._set_lexicographic_objective_multiobject_hierarchy()   # update lexicographic objective to include new dual variables in secondary objective
         return l
     #endregion
 

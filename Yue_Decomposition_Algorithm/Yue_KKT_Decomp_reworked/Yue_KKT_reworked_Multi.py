@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 from Instances.instance_loader import InstanceData
-from .MP_reworked import MasterProblem, MasterSolution
+from .MP_reworked_Multi import MasterProblem, MasterSolution
 from .SP1_reworked import SubProblem1, SubProblem1Solution
 from .SP2_reworked import SubProblem2, SubProblem2Solution
 # from shanghai_instance import make_shanghai_instance
@@ -337,14 +337,24 @@ def main(
         
         # LB update
         prev_LB = LB
-        try:
-            new_LB = mp.model.ObjBound  # Update LB with the best bound from MP
-        except Exception:
-            new_LB = mp.model.ObjVal  # Fallback to MP solution objective if bound is not available
+        if mp.model.NumObj > 1:
+            mp.model.Params.ObjNumber = 0  # Ensure looking at the primary objective for the bound
+            try:
+                new_LB = mp.model.ObjPassNObjBound  # Update LB with the best bound from MP
+                logging.info(f"Best Master Problem Solution: Objective = {mp.model.ObjPassNObjVal:.2f}, Bound = {mp.model.ObjPassNObjBound:.2f}")
+            except Exception:
+                new_LB = mp.model.ObjPassNObjVal  # Fallback to MP solution objective if bound is not available
+                logging.info(f"Best Master Problem Solution: Objective = {mp.model.ObjPassNObjVal:.2f} (bound not available)")
+        else:
+            try:
+                new_LB = mp.model.ObjBound  # Update LB with the best bound from MP
+                logging.info(f"Best Master Problem Solution: Objective = {mp.model.ObjVal:.2f}, Bound = {mp.model.ObjBound:.2f}")
+            except Exception:
+                new_LB = mp.model.ObjVal  # Fallback to MP solution objective if bound is not available
+                logging.info(f"Best Master Problem Solution: Objective = {mp.model.ObjVal:.2f} (bound not available)")
         LB = max(LB, new_LB)  # Ensure LB does not decrease
         
         # solution logging
-        logging.info(f"Best Master Problem Solution: Objective = {mp.model.ObjVal:.2f}, Bound = {mp.model.ObjBound:.2f}")
         if new_LB > prev_LB:
             logging.info(f"New LB found. LB updated from {prev_LB:.2f} to {new_LB:.2f}")
         else:
