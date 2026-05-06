@@ -9,13 +9,10 @@ from enum import Enum, auto         # define a set of named constant values for 
 from dataclasses import dataclass
 from typing import Optional
 
-from Instances.instance_loader import InstanceData
-from .MP_reworked import MasterProblem, MasterSolution
-from .SP1_reworked import SubProblem1, SubProblem1Solution
-from .SP2_reworked import SubProblem2, SubProblem2Solution
-# from shanghai_instance import make_shanghai_instance
-# from Instances.shanghai_instance_scaled import make_shanghai_instance_scaled
-from Instances.shanghai_instance_effective import make_shanghai_instance_effective
+from Instances.instance_generator_normalized import InstanceData
+from .MP_normalization import MasterProblem, MasterSolution
+from .SP1_normalization import SubProblem1, SubProblem1Solution
+from .SP2_normalization import SubProblem2, SubProblem2Solution
 
 
 class DecompositionStatus(Enum):
@@ -184,10 +181,17 @@ def log_bigM_binding(mp: MasterProblem, data: InstanceData, *, tol_ratio: float 
                 dual_hits.append(f"{name}: dual={lam:.3g} hits M={M:.3g}")
                 total_dual_hits += 1
 
+        def _get_primal_M(data: InstanceData, M_key: str, *idx) -> float:
+            M = data.M_primal[M_key]
+            for i in idx:
+                M = M[i]
+            return float(M)
+
         # -------- helper: check b_expr <= M_primal*(1-bin)
-        def check_primal_cap(name: str, b_expr: float, bin_var, M_key: str):
+        def check_primal_cap(name: str, b_expr: float, bin_var, M_key: str, *idx):
             nonlocal total_primal_hits
-            M = float(data.M_primal[M_key])
+            # M = float(data.M_primal[M_key])
+            M = _get_primal_M(data, M_key, *idx)
             b = float(bin_var.X)
             if (not is_one(b)) and near_cap(b_expr, M):
                 primal_hits.append(f"{name}: primal={b_expr:.3g} hits M={M:.3g}")
@@ -203,7 +207,7 @@ def log_bigM_binding(mp: MasterProblem, data: InstanceData, *, tol_ratio: float 
         for c in data.C:
             bF4 = data.kappa_coproc * data.alpha_c[c] - sum(float(oc.q_scw[s, c, w].X) * data.beta_w[w] for s in data.S for w in data.W)
             check_dual_cap(f"OC{l}.F4[c={c}]", oc.lam_F4[c], oc.bin_F4[c], "lam_F4")
-            check_primal_cap(f"OC{l}.F4[c={c}]", bF4, oc.bin_F4[c], "F4")
+            check_primal_cap(f"OC{l}.F4[c={c}]", bF4, oc.bin_F4[c], "F4", c)
 
         # === F5 (b = cap - sum q_cw) >= 0
         for c in data.C:
@@ -218,20 +222,20 @@ def log_bigM_binding(mp: MasterProblem, data: InstanceData, *, tol_ratio: float 
             for f in data.F:
                 check_dual_cap(f"OC{l}.pi_q_cf[{c},{f}]", oc.pi_q_cf[c, f], oc.bin_q_cf[c, f], "pi_q_cf")
                 q = float(oc.q_cf[c, f].X)
-                check_primal_cap(f"OC{l}.q_cf[{c},{f}]", q, oc.bin_q_cf[c, f], "q_cf")
+                check_primal_cap(f"OC{l}.q_cf[{c},{f}]", q, oc.bin_q_cf[c, f], "q_cf", c, f)
 
         for s in data.S:
             for c in data.C:
                 for w in data.W:
                     check_dual_cap(f"OC{l}.pi_q_scw[{s},{c},{w}]", oc.pi_q_scw[s, c, w], oc.bin_q_scw[s, c, w], "pi_q_scw")
                     q = float(oc.q_scw[s, c, w].X)
-                    check_primal_cap(f"OC{l}.q_scw[{s},{c},{w}]", q, oc.bin_q_scw[s, c, w], "q_scw")
+                    check_primal_cap(f"OC{l}.q_scw[{s},{c},{w}]", q, oc.bin_q_scw[s, c, w], "q_scw", s, c, w)
         
         for s in data.S:
             for w in data.W:
                 check_dual_cap(f"OC{l}.pi_r_sw[{s},{w}]", oc.pi_r_sw[s, w], oc.bin_r_sw[s, w], "pi_r_sw")
                 r = float(oc.r_sw[s, w].X)
-                check_primal_cap(f"OC{l}.r_sw[{s},{w}]", r, oc.bin_r_sw[s, w], "r_sw")
+                check_primal_cap(f"OC{l}.r_sw[{s},{w}]", r, oc.bin_r_sw[s, w], "r_sw", s, w)
 
 
         if dual_hits or primal_hits:
@@ -279,7 +283,9 @@ def run_yue_decomposition(
         mip_gap: float = 1e-4,
         Xi: float = 1e-1,
         max_iterations: int = 5,
-        instance: InstanceData = None
+        instance: InstanceData = None,
+        weight_env: float = 0.5,
+        weight_mon: float = 0.5,
 ) -> None:
 
     # Load instance data
@@ -287,6 +293,9 @@ def run_yue_decomposition(
     if instance is None:
         raise RuntimeError("Instance data must be provided to run the Decomposition Algorithm.")
     instance_data = instance
+
+    instance_data.weight_env = weight_env
+    instance_data.weight_mon = weight_mon
 
     # Starting Configuration
     LB = -np.inf
@@ -318,18 +327,22 @@ def run_yue_decomposition(
         if Verbose:
             logging.info("\n" + "="*70)
             logging.info(f"Iteration {iteration}")
-            logging.info(f"Current bounds: LB = {LB:.2f}, UB = {UB:.2f}, Gap = {(UB - LB):.2f}")
+            logging.info(f"Current bounds: LB = {LB:.5f}, UB = {UB:.5f}, Gap = {(UB - LB):.5f}")
             logging.info("="*70)
 
         # Solve Master Problem
         if iteration % 5 == 0:
             mp.model.Params.MIPFocus = 3  # Focus on bound improvement every 5 iterations
             # mp.solve(time_limit=1800)  # Longer time limit for MP every 5 iterations to improve LB
+            # mp.model.Params.ScaleFlag = 2  # Enable aggressive scaling to help with numerical issues and potentially improve bounds
+            mp.model.Params.NumericFocus = 1  # Degree to which the code attempts to detect and manage numerical issues (0 - default, 3 max)
             mp.solve(time_limit=solver_time_limit)  # Longer time limit for MP every 5 iterations to improve LB
         else:
             mp.model.Params.MIPFocus = 0  # Default focus
             # mp.solve(time_limit=solver_time_limit)
             # mp.model.Params.MIPGap = 0.02
+            # mp.model.Params.ScaleFlag = 2   # Enable aggressive scaling to help with numerical issues and potentially improve bounds
+            mp.model.Params.NumericFocus = 1  # Degree to which the code attempts to detect and manage numerical issues (0 - default, 3 max)
             mp.solve(time_limit=solver_time_limit, mip_gap=mip_gap)
         if mp.model.SolCount == 0:
             logging.info("No solution found for Master Problem. Terminating.")
@@ -345,13 +358,20 @@ def run_yue_decomposition(
         LB = max(LB, new_LB)  # Ensure LB does not decrease
         
         # solution logging
-        logging.info(f"Best Master Problem Solution: Objective = {mp.model.ObjVal:.2f}, Bound = {mp.model.ObjBound:.2f}")
+        logging.info(f"Best Master Problem Solution: Objective = {mp.model.ObjVal:.5f}, Bound = {mp.model.ObjBound:.5f}")
         if new_LB > prev_LB:
-            logging.info(f"New LB found. LB updated from {prev_LB:.2f} to {new_LB:.2f}")
+            logging.info(f"New LB found. LB updated from {prev_LB:.5f} to {new_LB:.5f}")
         else:
-            logging.info(f"LB remains unchanged: LB = {LB:.2f}")
+            logging.info(f"LB remains unchanged: LB = {LB:.5f}")
 
         mp_sol = mp.extract_solution()
+        # Log the objective components for the MP solution
+        logging.info("\nObjective breakdown MP:\n")
+        logging.info(f"Weights: Environment ={instance_data.weight_env:.2f}, Monetary={instance_data.weight_mon:.2f}")
+        for index, (component, value) in enumerate(mp_sol.objective_components.items(), start=1):
+                logging.info(f"{component:<30} {float(value):>14.6f}")
+                if index in (5,10):  # Add extra spacing after transport and treatment costs for readability
+                    logging.info("")
         log_bigM_binding(mp, instance_data)        # Log any big-M bindings in the current MP solution
         
 
@@ -362,7 +382,7 @@ def run_yue_decomposition(
         # sp1.solve(time_limit=solver_time_limit)
         sp1.solve()
         sp1_sol = sp1.extract_solution()
-        logging.info(f"Subproblem 1 Solution: {sp1_sol.sp1_obj:.2f}")
+        logging.info(f"Subproblem 1 Solution: {sp1_sol.sp1_obj:.5f}")
         logging.info(f'Binary combination in SP1: x_ck = {sp1_sol.x_ck}')
 
 
@@ -380,15 +400,15 @@ def run_yue_decomposition(
                 UB = float(sp2_sol.sp2_obj)
                 best_bilevel_mp_sol = mp_sol
                 best_bilevel_sp2_sol = sp2_sol
-                logging.info(f"Subproblem 2 feasible. Updated Upper Bound: UB = {UB:.2f}")
+                logging.info(f"Subproblem 2 feasible. Updated Upper Bound: UB = {UB:.5f}")
                 logging.info(f'Binary combination in SP2: x_ck = {sp2_sol.x_ck}')
             else:
-                logging.info(f"Subproblem 2 feasible but no improvement. Upper Bound remains unchanged: UB = {UB:.2f}")
+                logging.info(f"Subproblem 2 feasible but no improvement. Upper Bound remains unchanged: UB = {UB:.5f}")
                 logging.info(f'Binary combination in SP2: x_ck = {sp2_sol.x_ck}')
             
             # Check convergence or finish before adding cut
             if UB - LB <= Xi:
-                logging.info(f"Convergence achieved: UB - LB <= Xi: {UB - LB:.2f} <= {Xi}")
+                logging.info(f"Convergence achieved: UB - LB <= Xi: {UB - LB:.5f} <= {Xi}")
                 logging.info("Terminating decomposition algorithm.")
                 termination_reason = "Convergence achieved based on bounds and Gap tolerance (UB - LB <= Xi)"
                 terminate = True
@@ -443,9 +463,9 @@ def run_yue_decomposition(
 
             logging.info("\n" + "-"*70)
             logging.info(f"End of Iteration {iteration} Summary:")
-            logging.info(f"Best Incumbent MP Objective: {mp_sol.mp_obj:.2f}, MP Bound: {mp_sol.mp_bound:.2f}")
+            logging.info(f"Best Incumbent MP Objective: {mp_sol.mp_obj:.5f}, MP Bound: {mp_sol.mp_bound:.5f}")
             rel_gap_str = (f"{(UB - LB) / abs(UB) * 100:.2f} %" if math.isfinite(LB) and math.isfinite(UB) and UB != 0 else 'N/A')
-            logging.info(f"LB = {LB:.2f}, UB = {UB:.2f}, Gap (abs) = {(UB - LB):.2f}, Gap (relative) = {rel_gap_str}")
+            logging.info(f"LB = {LB:.5f}, UB = {UB:.5f}, Gap (abs) = {(UB - LB):.5f}, Gap (relative) = {rel_gap_str}")
             logging.info(f"The KKT-OC block was added based on x_ck pattern: {sp2_sol.x_ck if sp2_sol.feasible else sp1_sol.x_ck}")
             logging.info(f"Iteration time: {iteration_time:.2f} s | Total time so far: {total_time:.2f} s")
             logging.info("-"*70)
@@ -494,11 +514,11 @@ def run_yue_decomposition(
         logging.info(f"Termination Reason: {decomp_sol.termination_reason}")
         logging.info(f"Iterations: {decomp_sol.iterations}/{decomp_sol.max_iterations}")
         logging.info(f"Total Solution Time: {decomp_sol.total_solution_time:.2f} seconds")
-        logging.info(f"Final incumbent MP Objective: {decomp_sol.best_bilevel_mp_sol.mp_obj:.2f}" if decomp_sol.best_bilevel_mp_sol is not None else "No incumbent MP solution")
-        logging.info(f"Final LB (best Master): {decomp_sol.lower_bound:.2f}")
-        logging.info(f"Final UB (best SP2): {decomp_sol.upper_bound:.2f}")
-        logging.info(f"Final Gap (abs): {decomp_sol.final_gap_proven:.2f}" if decomp_sol.final_gap_proven is not None else "Final Gap (proven): N/A")
-        logging.info(f"Final Gap (incumbent abs): {decomp_sol.final_gap_incumbents:.2f}" if decomp_sol.final_gap_incumbents is not None else "Final Gap (incumbents): N/A")
+        logging.info(f"Final incumbent MP Objective: {decomp_sol.best_bilevel_mp_sol.mp_obj:.5f}" if decomp_sol.best_bilevel_mp_sol is not None else "No incumbent MP solution")
+        logging.info(f"Final LB (best Master): {decomp_sol.lower_bound:.5f}")
+        logging.info(f"Final UB (best SP2): {decomp_sol.upper_bound:.5f}")
+        logging.info(f"Final Gap (abs): {decomp_sol.final_gap_proven:.5f}" if decomp_sol.final_gap_proven is not None else "Final Gap (proven): N/A")
+        logging.info(f"Final Gap (incumbent abs): {decomp_sol.final_gap_incumbents:.5f}" if decomp_sol.final_gap_incumbents is not None else "Final Gap (incumbents): N/A")
         logging.info(f"Final Gap (realtive): {((decomp_sol.upper_bound - decomp_sol.lower_bound) / abs(decomp_sol.upper_bound)) * 100:.2f}%" if math.isfinite(decomp_sol.lower_bound) and math.isfinite(decomp_sol.upper_bound) and decomp_sol.upper_bound != 0 else "Final Gap (relative): N/A")
 
         logging.info(f"\nCutted patterns (x_ck fixed patterns with KKT-OC blocks added):")
@@ -506,9 +526,9 @@ def run_yue_decomposition(
             logging.info(f" Configuration {i}: {format_pattern_dict(pattern)}")
 
         if decomp_sol.status is DecompositionStatus.OPTIMAL_PROVEN and decomp_sol.final_gap_proven is not None:
-            logging.info(f"Final Gap (proven): {decomp_sol.final_gap_proven:.2f}")
+            logging.info(f"Final Gap (proven): {decomp_sol.final_gap_proven:.5f}")
         if decomp_sol.status is DecompositionStatus.OPTIMAL_INCUMBENTS_MATCH and decomp_sol.final_gap_incumbents is not None:
-            logging.info(f"Final Gap (incumbent solutions): {decomp_sol.final_gap_incumbents:.2f}")
+            logging.info(f"Final Gap (incumbent solutions): {decomp_sol.final_gap_incumbents:.5f}")
 
         if decomp_sol.status is DecompositionStatus.MP_INFEASIBLE_OR_NO_SOLUTION:
             logging.info("No feasible solution found for Master Problem during decomposition.")
@@ -523,6 +543,7 @@ def run_yue_decomposition(
             logging.info("" + "-"*70)
 
             logging.info("\nObjective breakdown:\n")
+            logging.info(f"Weights: Environment ={instance_data.weight_env:.2f}, Monetary={instance_data.weight_mon:.2f}")
             for index, (component, value) in enumerate(decomp_sol.best_bilevel_mp_sol.objective_components.items(), start=1):
                 logging.info(f"{component:<30} {float(value):>14.6f}")
                 if index in (5,10):  # Add extra spacing after transport and treatment costs for readability
@@ -554,94 +575,6 @@ def run_yue_decomposition(
                 _log_dict(name, getattr(decomp_sol.best_bilevel_sp2_sol, name), tol)
 
     solution_summary(decomp_sol)
-    #endregion
-
-    #region Old solution reports - keep for reference but not used in final logging
-    '''
-    def log_compact_best_solution(best_mp_sol, best_sp2_sol, tol: float = 1e-6) -> None:
-        logging.info("\n" + "#"*70)
-        logging.info("Best Solution found (nonzero relevant vars only, no duals):")
-        logging.info("" + "#"*70)
-
-        logging.info("\nMunicipality [Leader]")
-        logging.info("" + "-"*70)
-        logging.info(f"Objective value: {best_mp_sol.mp_obj:.2f}")
-        leader_dict_vars = ["q_gsw", "q_slw", "q_siw", "z_wh", "y_wh"]
-        leader_scalar_vars = ["mu_land", "mu_inc", "mu_kiln"]
-
-        logging.info(f"\nNonzero variables in Leader Problem (|x| > {tol}):")
-
-        for name in leader_dict_vars:
-            _log_dict(name, getattr(best_mp_sol, name))
-
-        for name in leader_scalar_vars:
-            val = float(getattr(best_mp_sol, name))
-            if abs(val) > tol:
-                logging.info(f"{name} = {val:.10g}")
-
-        logging.info("\nCement Producer [Follower]")
-        logging.info("" + "-"*70)
-        logging.info(f"Objective value: {last_sp2_model.ObjVal:.2f}")
-        follower_dict_vars = ["x_ck", "q_cf", "r_sw", "q_scw"]
-        logging.info(f"\nNonzero variables in Follower Problem (|x| > {tol}):")
-        for name in follower_dict_vars:
-            _log_dict(name, getattr(best_sp2_sol, name))
-    
-    logging.info("\n" + "#"*70)
-    logging.info("Finished Yue-KKT Decomposition run.")
-    logging.info(f"\nTotal time for Yue-KKT Decomposition Algorithm: {decomp_solution_time:.2f} seconds")
-    logging.info(f"Iterations {iteration}")
-    logging.info(f"Final LB = {LB:.2f}")
-    logging.info(f"Final UB = {UB:.2f}")
-    logging.info(f"Final Gap = {(UB - LB):.2f} (tolerance Xi = {Xi})")
-    logging.info(f"Cutted patterns: {generated_patterns_kkt_blocks}")
-    if best_bilevel_mp_sol is not None and best_bilevel_sp2_sol is not None:
-        # logging.info("\nBest Solution found:")
-        # logging.info("Master Problem Solution (Leader Decisions):")
-        # logging.info(best_mp_sol)
-        # logging.info("\nSubproblem 2 Solution (Follower Reaction):")
-        # logging.info(best_sp2_sol)
-
-        log_compact_best_solution(best_bilevel_mp_sol, best_bilevel_sp2_sol)
-    else:
-        logging.info("No feasible solution found during the decomposition process.")
-
-    # Print all nonzero decision variables from final solved models
-    leader_vars = ["q_gsw", "q_slw", "q_siw", "d_siw", "mu_land", "mu_inc", "mu_kiln", "z_wh", "y_wh"]
-    follower_vars = ["x_ck", "q_cf", "r_sw", "q_scw"]
-    if mp.model.SolCount > 0:
-        logging.info("\n" + "#"*70)
-        logging.info("Best Solution found (nonzero variables only, no duals):")
-        logging.info("" + "#"*70)
-
-        logging.info("\nMunicipality [Leader]")
-        logging.info("" + "-"*70)
-
-        leader_obj_values = mp.get_objective_breakdown()
-        logging.info("\nObjective breakdown:\n")
-        # key column width for alignment
-        key_width_leader=max(len(k) for k in leader_obj_values.keys()) + 2
-        for index, (k, v) in enumerate(leader_obj_values.items(), start=1):
-            logging.info(f"{k:<{key_width_leader}} {v:>14.6f}")
-            if index in (5,10):  # Add extra spacing after transport and treatment costs for readability
-                logging.info("")
-
-        log_nonzero_gurobi_vars(mp.model, "Leader Problem [Municipality]", var_names_to_log=leader_vars)
-    
-    if last_sp2_model is not None and last_sp2_model.SolCount > 0:
-        logging.info("\n\nCement Producer [Follower]")
-        logging.info("" + "-"*70)
-
-        follower_obj_values = sp2.get_objective_components()
-        logging.info("\nObjective breakdown:\n")
-        key_width_follower = max(len(k) for k in follower_obj_values.keys()) + 2
-        for index, (k, v) in enumerate(follower_obj_values.items(), start=1):
-            logging.info(f"{k:<{key_width_follower}} {v:>14.6f}")
-            if index == 6:
-                logging.info("")
-
-        log_nonzero_gurobi_vars(last_sp2_model, "Follower Problem [Cement Producer]", var_names_to_log=follower_vars)
-    '''
     #endregion
 #endregion
 

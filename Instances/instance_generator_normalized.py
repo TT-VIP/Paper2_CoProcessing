@@ -68,8 +68,6 @@ class InstanceData:
     Q_k_max: int                # Max cement kiln capacity for co-procesing (tons)
 
     # Objective weights & policy
-    weight_env: float               # Weight for environmental objective in leader problem
-    weight_mon: float               # Weight for monetary objective in leader problem
     kappa_land: float               # Maximum allowed landfill quota/capacity
     kappa_coproc: float             # Maximum co-processing quota/capacity
     budget_municipality: float      # Budget for the municipality
@@ -94,10 +92,18 @@ class InstanceData:
     fixcost_invest_k: List[float]
 
     # Big-M values for primal and dual variables in KKT cuts
-    M_primal: Dict[str, float]
+    M_primal: Dict[str, float | Dict[int | float, Any]]   # Big-M values for primal variables in KKT cuts (indexed dictionary by s for r_sw)
     M_dual: Dict[str, float]
 
     U_w: List[int]          # Upper bound on waste flow of type w (can be tightened based on data)
+
+    # multi-objective weights and bounds
+    weight_env: float = 0.5               # Weight for environmental objective in leader problem
+    weight_mon: float = 0.5               # Weight for monetary objective in leader problem
+    Emission_min: float | None = None            # Minimum emissions (single objective for normalization)
+    Emission_max: float | None = None            # Maximum emissions (single objective for normalization)
+    Cost_min: float | None = None            # Minimum cost (single objective for normalization)
+    Cost_max: float | None = None            # Maximum cost (single objective for normalization)
 #endregion
 
 ##########################################
@@ -222,8 +228,6 @@ def generate_instance(seed: int = 7) -> InstanceData:
     # -----------------------------
     # POLICY / WEIGHTS
     # -----------------------------
-    weight_env = 1.0
-    weight_mon = 0.004
     kappa_land = 0.35
     kappa_coproc = 0.40
 
@@ -262,35 +266,38 @@ def generate_instance(seed: int = 7) -> InstanceData:
     opex_fix_ann = [c_invest_k[k] * 0.06 for k in K]
     fixcost_invest_k = [(capex_ann[k] + opex_fix_ann[k])/1000 for k in K]     # divide by 1000 to scale down to daily cost, because only 0.1% of annual waste is modeled in this instance
 
+    total_Q_gen_per_w = [sum(Q_gw[g][w] for g in G) for w in W]
     # Big-M value for cut generation
     M_primal = {
-        'F3': 10,
-        'F4': max(alpha_c)*kappa_coproc+10,     # Maximmum energy content in co-processing
-        'F5': Q_k_max+1,                        # Maximum co-processing quantity
-        'F9_1': Q_k_max+1,                      # Maximum co-processing quantity
-        'F9_2': Q_k_max+1,                      # Maximum co-processing quantity
-        'F9_3': Q_k_max+1,                      # Maximum co-processing quantity
-        'q_cf': max(alpha_c)+10,                # Maximum quantity of coal processed at cement plant (based on maximum energy content needed)
-        'q_scw': Q_k_max+1,                     # Maximum quantity of waste allocated from transfer station to cement plant
-        'r_sw': max(Q_s)+1,                     # Maximum residual waste at transfer station after allocation
-        'y_cwh': Q_k_max+1                      # Maximum quantity of waste allocated to subsidy level h at cement plant c
+        'F3': 1,
+        # 'F4': max(alpha_c)*kappa_coproc+10,     # Maximmum energy content in co-processing
+        'F4': {c: (alpha_c[c]*kappa_coproc) + 1 for c in C},     # Maximmum energy content in co-processing
+        'F5': Q_k_max+1,                        # Maximum co-processing quantity (not really needed, because x_ck_fixed is already fixed in the OC block, thus the maximal capacity is deterministic based on the fixed investment decision; keep it for fallback)
+        # 'q_cf': max(alpha_c)+1,                 # Maximum quantity of coal processed at cement plant (based on maximum energy content needed)
+        # since alpha_c is in GJ and beta_f is in GJ/t, a physically meaningful coal bound is closer to alpha_c[c] / beta_f[f] + 1.0
+        'q_cf': {c: {f: alpha_c[c] / beta_f[f] + 1 for f in F} for c in C},   # Maximum quantity of coal processed at cement plant (based on maximum energy content needed)
+        # 'q_scw': Q_k_max+1,                     # Maximum quantity of waste allocated from transfer station to cement plant
+        'q_scw': {s: {c: {w: float(min(Q_s[s], Q_k_max, total_Q_gen_per_w[w]))+1 for w in W} for c in C} for s in S},  # Maximum quantity of waste allocated from transfer station to cement plant
+        # 'r_sw': max(Q_s)+1,                   # Maximum residual waste at transfer station after allocation
+        # 'r_sw': {s: int(Q_s[s])+1 for s in S},  # Maximum residual waste at transfer station after allocation, capcitated by individual capacities of transfer stations
+        'r_sw': {s: {w: float(min(Q_s[s], total_Q_gen_per_w[w]))+1 for w in W} for s in S},  # Maximum residual waste at transfer station after allocation, capcitated by individual capacities of transfer stations
     }
 
     M_dual = {
-        'lam_F3': 1e3,     # Big-M for dual variable of constraint F3 (energy fulfillment constraint)
+        # 'lam_F3': 1e3,     # Big-M for dual variable of constraint F3 (energy fulfillment constraint)
+        # p_{f}-\lambda^{F3}_c\beta_f-\pi^{1}_{cf} = 0 with \lambda^{F3}_c >= 0 and \pi^{1}_{cf} >= 0; rearrange to \pi^{1}_{cf} = p_{f}-\lambda^{F3}_c\beta_f; it follows p_{f}-\lambda^{F3}_c\beta_f >= 0 and thus \lambda^{F3}_c <= p_{f}/\beta_f for all f; so a reasonable Big-M for \lambda^{F3}_c is max(p_{f}/\beta_f) + 1 to allow for some numerical tolerance
+        'lam_F3': min(price_f[f] / beta_f[f] for f in F) + 1,     # Big-M for dual variable of constraint F3 (energy fulfillment constraint)
         'lam_F4': 1e3,     # Big-M for dual variable of constraint F4 (maximum co-processing quantity)
         'lam_F5': 1e4,     # Big-M for dual variable of constraint F5 (co-process capacity limited by investment decision)
-        'lam_F9_1': 1e4,   # Big-M for dual variable of constraint F9_1 (linking co-processing quantity to subsidy level h)
-        'lam_F9_2': 1e4,   # Big-M for dual variable of constraint F9_2 (linking co-processing quantity to subsidy level h)
-        'lam_F9_3': 1e4,   # Big-M for dual variable of constraint F9_3 (linking co-processing quantity to subsidy level h)
         # derived from stationarity for q_cf: data.price_f[f] - lam_F3[c]*data.beta_f[f] - pi_q_cf[c,f] == 0 with lam_F3 >= 0 and beta_f >= 8, so price_f is a reasonable upper bound for pi_q_cf
         'pi_q_cf': max(price_f)+1,    # Big-M for dual variable of constraint limiting quantity of coal processed at cement plant
         'pi_q_scw': 1e4,   # Big-M for dual variable of constraint limiting quantity of waste allocated from transfer station to cement plant
         'pi_r_sw': 1e4,    # Big-M for dual variable of constraint limiting residual waste at transfer station after allocation
-        'pi_y_cwh': 1e4    # Big-M for dual variable of constraint linking subsidy level to co-processing quantity
     }
 
-    U_w = [min(sum(Q_gw[g][w] for g in G), Q_k_max*len(C)) for w in W]  # Upper bound on waste flow of type w (can be tightened based on data)
+    # U_w = [min(sum(Q_gw[g][w] for g in G), Q_k_max*len(C)) for w in W]  # Upper bound on waste flow of type w (can be tightened based on data)
+    # A waste type w cannot flow trough network in an amount larger than: (i) total generated amount, (ii) total transfer-station capacity, (iii) total co-processing capacity
+    U_w = [min(total_Q_gen_per_w[w], sum(Q_s), Q_k_max*len(C)) for w in W]  # Upper bound on waste flow of type w (can be tightened based on data)
 
     return InstanceData(
         G_max=G_max, S_max=S_max, W_max=W_max, I_max=I_max, L_max=L_max, C_max=C_max,
@@ -304,7 +311,6 @@ def generate_instance(seed: int = 7) -> InstanceData:
         Q_gw=Q_gw, Q_gen_total=Q_gen_total,
         Q_s=Q_s, Q_l=Q_l, Q_i=Q_i,
         Q_k=Q_k, Q_k_max=Q_k_max,
-        weight_env=weight_env, weight_mon=weight_mon,
         kappa_land=kappa_land, kappa_coproc=kappa_coproc,
         budget_municipality=budget_municipality,
         phi_max=phi_max,
@@ -403,6 +409,15 @@ def write_instance_to_json(
 #endregion
 
 #region JSON reader
+# JSON turns dict keys into strings, so it is necessary to convert them back to ints for indexed Big-M values
+def _keys_to_int(d: dict) -> dict:
+    return {int(k): v for k, v in d.items()}
+
+def _keys_to_int_recursive(obj):
+    if isinstance(obj, dict):
+        return {int(k): _keys_to_int_recursive(v) for k, v in obj.items()}
+    return obj
+
 # JSON to InstanceData object
 def read_instanceData_from_json(json_path: Path) -> InstanceData:
     with json_path.open('r', encoding='utf-8') as file:
@@ -420,6 +435,12 @@ def read_instanceData_from_json(json_path: Path) -> InstanceData:
     data['K'] = range(data['K_max'])
     data['F'] = range(data['F_max'])
     data['H'] = range(data['H_max'])
+
+    # Convert JSON string keys back to ints for indexed Big-M values
+    data['M_primal']['F4'] = _keys_to_int(data['M_primal']['F4'])
+    data['M_primal']['r_sw'] = _keys_to_int_recursive(data['M_primal']['r_sw'])
+    data['M_primal']['q_cf'] = _keys_to_int_recursive(data['M_primal']['q_cf'])
+    data['M_primal']['q_scw'] = _keys_to_int_recursive(data['M_primal']['q_scw'])
 
     instance = InstanceData(
         G_max=data['G_max'], S_max=data['S_max'], W_max=data['W_max'], 
@@ -482,7 +503,7 @@ def read_instance_metadata_from_json(json_path: Path) -> Dict[str, Any]:
 #region Run instance generator
 # call the script to generate an instance and save to JSON within the python environment (can be adapted to command-line arguments if needed)
 if __name__ == "__main__":
-    instance_name = "instance_m_base_001.json"
+    instance_name = "instance_m_base_normal_001.json"
     output_path = write_instance_to_json(
         output_dir=Path(__file__).parent / "generated_instances" / instance_name,
         instance_id=instance_name[:-5],  # Remove ".json" extension
