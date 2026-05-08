@@ -119,6 +119,8 @@ class SubProblem2:
         logging.info("Solving Subproblem 2...")
         logging.info(f"  → Time limit: {time_limit} seconds")
         logging.info("-"*60)
+
+        self.model.Params.NumericFocus = 1  # Focus on numerical issues to improve solution reliability for SP2, which is a feasibility problem and can be more sensitive to numerical issues
         self.model.optimize()
 
     def _set_gurobi_parameters(self) -> None:           # only needed if feasibility problem considered with 0 objective, otherwise not necessary to set special parameters for optimality focus

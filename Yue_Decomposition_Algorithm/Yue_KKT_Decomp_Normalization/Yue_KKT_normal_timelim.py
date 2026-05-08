@@ -286,6 +286,8 @@ def run_yue_decomposition(
         instance: InstanceData = None,
         weight_env: float = 0.5,
         weight_mon: float = 0.5,
+        total_time_limit: float = 3630.0,
+        shutdown_buffer: float = 30.0,
 ) -> None:
 
     # Load instance data
@@ -304,6 +306,15 @@ def run_yue_decomposition(
 
     # start timer for overall algorithm
     start_total = time.perf_counter()
+    # internal wall-clock budget for solver calls
+    def elapsed() -> float:
+        return time.perf_counter() - start_total
+
+    def remaining() -> float:
+        return max(0.0, total_time_limit - elapsed())
+
+    def time_left_for_solve() -> float:
+        return max(1.0, remaining() - shutdown_buffer)
 
     # Initialize Master Problem - L=empty set is implicit: MP starts without any OC blocks
     mp = MasterProblem(instance_data)
@@ -313,38 +324,62 @@ def run_yue_decomposition(
     best_bilevel_sp2_sol = None
     termination_reason = None
 
-    last_sp2_model = None  # to store the last SP2 model for potential post-analysis
+    # Track if we've printed quality for each model after first solve
+    mp_quality_printed = False
+    sp1_quality_printed = False
+    sp2_quality_printed = False
 
     generated_patterns_kkt_blocks = set()   # book-keeping: to track which patterns have had KKT OC blocks added, to avoid duplicates
     generated_patterns = []                 # list of dictionaries of all patterns in the order the cuts were added
 
     # Decomposition Algorithm with KKT OC Cuts
-    while iteration < max_iterations and (UB - LB > Xi):
+    while iteration < max_iterations and (UB - LB > Xi) and remaining() > shutdown_buffer:
         iteration += 1
         terminate = False
         starttime_iteration = time.perf_counter()
 
         if Verbose:
-            logging.info("\n" + "="*70)
+            logging.info("\n" + "="*150)
             logging.info(f"Iteration {iteration}")
             logging.info(f"Current bounds: LB = {LB:.5f}, UB = {UB:.5f}, Gap = {(UB - LB):.5f}")
-            logging.info("="*70)
+            logging.info("="*150)
+
+        if iteration <= 8:
+            base_mp_limit = 180
+        elif iteration <= 10:
+            base_mp_limit = 300
+        else:
+            base_mp_limit = 600
+
+        mp_time_limit = min(base_mp_limit, time_left_for_solve())
+        
+        if mp_time_limit <= 5.5:
+            termination_reason = "Global time limit reached (before next MP solve, time left <= 5 seconds)"
+            break
 
         # Solve Master Problem
         if iteration % 5 == 0:
-            mp.model.Params.MIPFocus = 3  # Focus on bound improvement every 5 iterations
-            # mp.solve(time_limit=1800)  # Longer time limit for MP every 5 iterations to improve LB
+            mp.model.Params.MIPFocus = 3  # Focus on best objective bound if bound is moving very slowly (or not at all)
             # mp.model.Params.ScaleFlag = 2  # Enable aggressive scaling to help with numerical issues and potentially improve bounds
-            mp.model.Params.NumericFocus = 1  # Degree to which the code attempts to detect and manage numerical issues (0 - default, 3 max)
             mp.solve(time_limit=solver_time_limit)  # Longer time limit for MP every 5 iterations to improve LB
         else:
             mp.model.Params.MIPFocus = 0  # Default focus - balance between finding good solutions and proving optimality
             # mp.model.Params.MIPFocus = 2  # solver is having no trouble finding good quality solutions, and wish to focus more attention on proving optimality
-            mp.solve(time_limit=solver_time_limit, mip_gap=mip_gap)
+            # mp.model.Params.ScaleFlag = 2   # Already default in MP.py
+            mp.solve(time_limit=mp_time_limit, mip_gap=mip_gap)
         if mp.model.SolCount == 0:
             logging.info("No solution found for Master Problem. Terminating.")
             termination_reason = "MP solution run returned no feasible solution"
             break
+
+        # Print MP quality after first solve (happens after first OC block is added in iteration 2)
+        if not mp_quality_printed and mp.model.SolCount > 0 and iteration >= 2:
+            logging.info("\n" + "="*70)
+            logging.info("Master Problem Solution Quality (after first OC block added):")
+            logging.info("="*70)
+            mp.model.printQuality()
+            logging.info("="*70 + "\n")
+            mp_quality_printed = True
         
         # LB update
         prev_LB = LB
@@ -373,25 +408,65 @@ def run_yue_decomposition(
         logging.info(f"\nCheck big-M bindings in MP solution:")
         log_bigM_binding(mp, instance_data)        # Log any big-M bindings in the current MP solution
         
+        if remaining() <= shutdown_buffer:
+            termination_reason = "Global time limit reached (after MP solve and before SP solves staerted)"
+            break
 
-
+        sp1_time_limit = min(60.0, time_left_for_solve())
         # Solve Subproblem 1 at leader solution (Follower Optimality)
         sp1 = SubProblem1(instance_data)
         sp1.build(mp_sol, name=f"Subproblem 1 - Iteration {iteration}", output_flag=1)
+        
+        # Print SP1 statistics after first build
+        if not sp1_quality_printed:
+            logging.info("\n" + "="*70)
+            logging.info("Subproblem 1 Statistics:")
+            logging.info("="*70)
+            sp1.model.printStats()
+            logging.info("="*70 + "\n")
+
         # sp1.solve(time_limit=solver_time_limit)
-        sp1.solve()
+        sp1.solve(time_limit=sp1_time_limit)
+
+        # Print SP1 quality after first solve
+        if not sp1_quality_printed and sp1.model.SolCount > 0:
+            logging.info("\n" + "="*70)
+            logging.info("Subproblem 1 Solution Quality (after first solve):")
+            logging.info("="*70)
+            sp1.model.printQuality()
+            logging.info("="*70 + "\n")
+            sp1_quality_printed = True
+
         sp1_sol = sp1.extract_solution()
         logging.info(f"Subproblem 1 Solution: {sp1_sol.sp1_obj:.5f}")
         logging.info(f'Binary combination in SP1: x_ck = {sp1_sol.x_ck}')
 
-
+        sp2_time_limit = min(60, time_left_for_solve())
         # Solve Subproblem 2 (Bilevel Feasibility) at leader solution and SP1 follower solution
         sp2 = SubProblem2(instance_data)
         sp2.build(mp_sol, sp1_sol, name=f"Subproblem 2 - Iteration {iteration}", output_flag=1)
+
+        # Print SP2 statistics after first build
+        if not sp2_quality_printed:
+            logging.info("\n" + "="*70)
+            logging.info("Subproblem 2 Statistics:")
+            logging.info("="*70)
+            sp2.model.printStats()
+            logging.info("="*70 + "\n")
+
         # sp2.solve(time_limit=solver_time_limit)
-        sp2.solve()
+        sp2.solve(time_limit=sp2_time_limit)
+
+        # Print SP2 quality after first solve
+        if not sp2_quality_printed and sp2.model.SolCount > 0:
+            logging.info("\n" + "="*70)
+            logging.info("Subproblem 2 Solution Quality (after first solve):")
+            logging.info("="*70)
+            sp2.model.printQuality()
+            logging.info("="*70 + "\n")
+            sp2_quality_printed = True
+
         sp2_sol = sp2.extract_solution()
-        last_sp2_model = sp2.model  # Store the last SP2 model for potential post-analysis
 
         if sp2_sol.feasible:
             # Update upper bound and best solutions if better
@@ -431,6 +506,14 @@ def run_yue_decomposition(
                     logging.info("Adding KKT-OC block based on x_ck of SP2 solution to cut off current leader solution.")
                     mp._add_kkt_oc_block(sp2_sol.x_ck)
                     # mp._add_kkt_oc_block_sos1(sp2_sol.x_ck)
+
+                    # Print MP stats after first OC block is added
+                    if not mp_quality_printed:
+                        logging.info("\n" + "="*70)
+                        logging.info("Master Problem Statistics (after first OC block added):")
+                        logging.info("="*70)
+                        mp.model.printStats()
+                        logging.info("="*70 + "\n")
         
         else:
             if iteration == max_iterations:
@@ -453,6 +536,14 @@ def run_yue_decomposition(
                     logging.info("Adding KKT-OC block based on x_ck of SP1 solution to cut off current leader solution.")
                     mp._add_kkt_oc_block(sp1_sol.x_ck)
                     # mp._add_kkt_oc_block_sos1(sp1_sol.x_ck)
+
+                    # Print MP stats after first OC block is added
+                    if not mp_quality_printed:
+                        logging.info("\n" + "="*70)
+                        logging.info("Master Problem Statistics (after first OC block added):")
+                        logging.info("="*70)
+                        mp.model.printStats()
+                        logging.info("="*70 + "\n")
 
         # Iteration summary
         if Verbose:
@@ -519,7 +610,7 @@ def run_yue_decomposition(
         logging.info(f"Final Gap (abs): {decomp_sol.final_gap_proven:.5f}" if decomp_sol.final_gap_proven is not None else "Final Gap (proven): N/A")
         logging.info(f"Final Gap (incumbent abs): {decomp_sol.final_gap_incumbents:.5f}" if decomp_sol.final_gap_incumbents is not None else "Final Gap (incumbents): N/A")
         logging.info(f"Final Gap (realtive): {((decomp_sol.upper_bound - decomp_sol.lower_bound) / abs(decomp_sol.upper_bound)) * 100:.2f}%" if math.isfinite(decomp_sol.lower_bound) and math.isfinite(decomp_sol.upper_bound) and decomp_sol.upper_bound != 0 else "Final Gap (relative): N/A")
-        logging.info(f"Final Gap (incumbent realtive): {((decomp_sol.upper_bound - decomp_sol.best_bilevel_mp_sol.mp_obj) / abs(decomp_sol.upper_bound)) * 100:.2f}%" if math.isfinite(decomp_sol.best_bilevel_mp_sol.mp_obj) and math.isfinite(decomp_sol.upper_bound) and decomp_sol.upper_bound != 0 else "Final Gap (incumbent relative): N/A")
+        logging.info(f"Final Gap (incumbent realtive): {((decomp_sol.upper_bound - decomp_sol.best_bilevel_mp_sol.mp_obj) / abs(decomp_sol.upper_bound)) * 100:.2f}%" if decomp_sol.best_bilevel_mp_sol is not None and math.isfinite(decomp_sol.best_bilevel_mp_sol.mp_obj) and math.isfinite(decomp_sol.upper_bound) and decomp_sol.upper_bound != 0 else "Final Gap (incumbent relative): N/A")
 
         logging.info(f"\nCutted patterns (x_ck fixed patterns with KKT-OC blocks added):")
         for i, pattern in enumerate(generated_patterns, start=1):

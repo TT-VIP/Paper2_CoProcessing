@@ -231,7 +231,10 @@ def generate_instance(seed: int = 7) -> InstanceData:
     kappa_land = 0.35
     kappa_coproc = 0.40
 
-    budget_municipality = 800_000_000.0  # scale up vs small toy
+    # budget_municipality = 800_000_000.0  # scale up vs small toy
+    budget_availability = 0.9   # Only 90% of the maximum total potential waste flow to kilns can be subsidized supposing maximum subsidy levels, 
+                                # to create a more realistic budget constraint that requires trade-offs in subsidy allocation
+    budget_municipality = budget_availability * sum(phi_max[w] * U_w[w] for w in W)  # Set municipal budget based on maximum potential subsidy payout with some availability factor
     phi_max = [220.0, 175.0]  # [high moisture, medium moisture]
     phi_wh = [[(h / (H_max - 1)) * phi_max[w] for h in H] for w in W]
 
@@ -264,7 +267,8 @@ def generate_instance(seed: int = 7) -> InstanceData:
     CRF = crf(i_rate, lifetime_years)
     capex_ann = [c_invest_k[k] * CRF for k in K]
     opex_fix_ann = [c_invest_k[k] * 0.06 for k in K]
-    fixcost_invest_k = [(capex_ann[k] + opex_fix_ann[k])/1000 for k in K]     # divide by 1000 to scale down to daily cost, because only 0.1% of annual waste is modeled in this instance
+    fixcost_invest_unscaled_k = [capex_ann[k] + opex_fix_ann[k] for k in K]
+    fixcost_invest_k = [cost/1000 for cost in fixcost_invest_unscaled_k]     # divide by 1000 to scale down to daily cost, because only 0.1% of annual waste is modeled in this instance
 
     total_Q_gen_per_w = [sum(Q_gw[g][w] for g in G) for w in W]
     # Big-M value for cut generation

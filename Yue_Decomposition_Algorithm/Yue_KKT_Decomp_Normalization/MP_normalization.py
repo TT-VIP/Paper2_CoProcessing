@@ -184,14 +184,16 @@ class MasterProblem:
         logging.info(f"  → Thereof binary variables: {self.model.NumBinVars}")
         logging.info(f"  → Thereof continuous variables: {self.model.NumVars - self.model.NumBinVars}\n")
 
-        logging.info(f"  → Total constraints: {self.model.NumConstrs}")
+        logging.info(f"  → Total constraints: {self.model.NumConstrs}\n\n")
         self.model.Params.TimeLimit = time_limit
         self.model.Params.MIPGap = mip_gap  # Optional: set MIP gap for faster solves (e.g., 5% gap)
-        # self.model.Params.NumericFocus = 3  # Optional: set numeric focus for better numerical stability (at the cost of longer solve times)
         self.model.Params.ScaleFlag = 2     # Enable geometric scaling to help with numerical issues and potentially improve bounds (https://link.springer.com/article/10.1007/s10589-011-9420-4)
-        self.model.Params.FeasibilityTol = 1e-6
-        self.model.Params.OptimalityTol = 1e-6
-        self.model.Params.IntFeasTol = 1e-6
+        self.model.Params.NumericFocus = 1  # Degree to which the code attempts to detect and manage numerical issues (0 - default, 3 max)
+        self.model.Params.Presolve = 2      # Enable presolve to reduce problem size and potentially improve solve times
+        # Default values
+        # self.model.Params.FeasibilityTol = 1e-6
+        # self.model.Params.OptimalityTol = 1e-6
+        self.model.Params.IntFeasTol = 1e-5     # Default is 1e-5, can be tightened to 1e-6 for more precise integer solutions (at the cost of longer solve times)
         self.model.optimize()
     #endregion
 
@@ -740,13 +742,15 @@ class MasterProblem:
             (lam_F5[c] <= data.M_dual["lam_F5"] * bin_F5[c] for c in data.C),
             name=f"{pfx}_CS3_dual",
         )
-        # Use pattern-specific capacity with safety margin instead of global Big-M, to tighten the formulation (cap_c could be eliminated when multiplying parantheses on RHS, but kept for clarity)
+        # Use pattern-specific capacity instead of global Big-M to tighten the formulation (cap_c could be eliminated when multiplying parantheses on RHS, but kept for clarity)
+        # Safety margin 1e-6 not needed beause q_scw>=0. Thus, when cap_c=0, the complementarity constraint becomes -sum_w q_cw <= 0, which is always true. The hard zero-transport condition is already imposed by primal feasibility F5.
+        # When cap_c>0, the constraint is not restrictive for the primal variables when bin_F5[c]=0, and forces sum_w q_cw to be 0 when bin_F5[c]=1, thus satisfying complementarity.
         for c in data.C:
             cap_c = gp.quicksum(x_ck_fixed[(c, k)] * data.Q_k[k] for k in data.K)
             m.addConstr(
                 (
                     cap_c - gp.quicksum(q_scw[s, c, w] for s in data.S for w in data.W)
-                    <= (cap_c + 1e-6) * (1 - bin_F5[c])
+                    <= cap_c * (1 - bin_F5[c])
                 ),
                 name=f"{pfx}_CS3_constr_c{c}",
             )

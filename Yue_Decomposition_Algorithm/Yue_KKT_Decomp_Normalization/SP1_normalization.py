@@ -97,6 +97,8 @@ class SubProblem1:
         logging.info("Solving Subproblem 1...")
         logging.info(f"  → Time limit: {time_limit} seconds")
         logging.info("-"*60)
+
+        self.model.Params.NumericFocus = 1  # Focus on numerical issues to improve solution reliability for SP1
         self.model.optimize()
 
     def extract_solution(self) -> SubProblem1Solution:

@@ -99,10 +99,15 @@ def _solve_single_objective_bound(
     
     logging.info(f"Solution status for {objective_component=}, {sense=}: {mp.model.Status}")
     logging.info("\nObjective breakdown MP:\n")
-    logging.info(f"Weights: Environment ={instance.weight_env:.2f}, Monetary={instance.weight_mon:.2f}")
+    if objective_component == "emission":
+        indices_to_report = {1, 2, 3, 4}
+    elif objective_component == "cost":
+        indices_to_report = {6, 7, 8, 9}
+
     for index, (component, value) in enumerate(mp_sol.objective_components.items(), start=1):
+        if index in indices_to_report:
             logging.info(f"{component:<30} {float(value):>14.6f}")
-            if index in (5,10):  # Add extra spacing after transport and treatment costs for readability
+            if index in (4, 9):  # Add extra spacing after transport and treatment costs for readability
                 logging.info("")
     
     value = float(mp.model.ObjVal)
@@ -163,10 +168,12 @@ def determine_normalization_bounds(
     instance.Cost_min = bounds.Cost_min
     instance.Cost_max = bounds.Cost_max
 
+    logging.info("-" * 60)
     logging.info("Normalization bounds computed:")
     logging.info(f"  Emission_min = {bounds.Emission_min:.6f}")
     logging.info(f"  Emission_max = {bounds.Emission_max:.6f}")
     logging.info(f"  Cost_min     = {bounds.Cost_min:.6f}")
     logging.info(f"  Cost_max     = {bounds.Cost_max:.6f}")
+    logging.info("-" * 60 + "\n")
 
     return bounds

@@ -8,7 +8,7 @@ ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from Yue_KKT_Decomp_Normalization.Yue_KKT_normalization import run_yue_decomposition
+from Yue_KKT_Decomp_Normalization.Yue_KKT_normal_timelim import run_yue_decomposition
 # from Yue_KKT_Decomp_reworked.Yue_KKT_reworked_Multi import main
 from Yue_KKT_Decomp_Normalization.Normalization import determine_normalization_bounds
 from Instances.instance_generator_normalized import read_instanceData_from_json, read_instance_metadata_from_json
@@ -63,10 +63,11 @@ if __name__ == "__main__":
 
     normalization_bounds = determine_normalization_bounds(instance)
     
-    solver_time_limit = 300     # Time limit for solving MP and SPs (in seconds)
-    mip_gap = 1e-4        # MIP gap for the master problem
+    solver_time_limit = 500     # Time limit for solving MP every 5th iteration (in seconds)
+    mip_gap = 1e-4              # MIP gap for the master problem
     Xi = 1e-5                   # Convergence threshold for leader objective improvement
-    max_iterations = 10          # Maximum number of iterations to prevent infinite loops
+    max_iterations = 3         # Maximum number of iterations to prevent infinite loops
+    total_runtime = 3630        # Total runtime limit for the entire decomposition algorithm (in seconds)
 
     run_yue_decomposition(
         Verbose=True, 
@@ -76,5 +77,6 @@ if __name__ == "__main__":
         max_iterations=max_iterations, 
         instance=instance,
         weight_env=1.0,
-        weight_mon=1.0
+        weight_mon=1.0,
+        total_time_limit=total_runtime
     )
