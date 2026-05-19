@@ -88,14 +88,22 @@ def _solve_single_objective_bound(
     # mp.model.Params.ScaleFlag = 2
 
     mp.model.optimize()
+
+    if mp.model.status != GRB.OPTIMAL:
+        raise RuntimeError(
+            f"Normalization bound solve failed: "
+            f"component={objective_component}, sense={sense}, "
+            f"status={mp.model.status}, sol_count={mp.model.SolCount}"
+        )
+
     mp_sol = mp.extract_solution()
 
-    if mp.model.SolCount == 0:
-        # instance.Emission_min, instance.Emission_max, instance.Cost_min, instance.Cost_max = old_bounds
-        raise RuntimeError(
-            f"Could not determine normalization bound for "
-            f"{objective_component=}, {sense=}."
-        )
+    # if mp.model.SolCount == 0:
+    #     # instance.Emission_min, instance.Emission_max, instance.Cost_min, instance.Cost_max = old_bounds
+    #     raise RuntimeError(
+    #         f"Could not determine normalization bound for "
+    #         f"{objective_component=}, {sense=}."
+    #     )
     
     logging.info(f"Solution status for {objective_component=}, {sense=}: {mp.model.Status}")
     logging.info("\nObjective breakdown MP:\n")

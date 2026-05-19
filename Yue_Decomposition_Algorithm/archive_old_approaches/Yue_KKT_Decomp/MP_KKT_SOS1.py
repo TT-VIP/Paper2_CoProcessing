@@ -188,6 +188,7 @@ class MasterProblem:
         self.model.Params.FeasibilityTol = 1e-6
         self.model.Params.OptimalityTol = 1e-6
         self.model.Params.IntFeasTol = 1e-6
+        self.model.Params.PreSOS1BigM = 0
         self.model.optimize()
     #endregion
 

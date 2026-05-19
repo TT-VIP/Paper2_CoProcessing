@@ -207,6 +207,7 @@ def generate_instance(seed: int = 7) -> InstanceData:
         Q_gw.append([q0, q1])
 
     Q_gen_total = sum(Q_gw[g][w] for g in G for w in W)
+    total_Q_gen_per_w = [sum(Q_gw[g][w] for g in G) for w in W]
 
     # Transfer capacity: ensure > inbound per station; keep loose
     # If each district maps mostly to one transfer, set capacity around 700..1100 t/day
@@ -231,12 +232,16 @@ def generate_instance(seed: int = 7) -> InstanceData:
     kappa_land = 0.35
     kappa_coproc = 0.40
 
-    # budget_municipality = 800_000_000.0  # scale up vs small toy
-    budget_availability = 0.9   # Only 90% of the maximum total potential waste flow to kilns can be subsidized supposing maximum subsidy levels, 
-                                # to create a more realistic budget constraint that requires trade-offs in subsidy allocation
-    budget_municipality = budget_availability * sum(phi_max[w] * U_w[w] for w in W)  # Set municipal budget based on maximum potential subsidy payout with some availability factor
     phi_max = [220.0, 175.0]  # [high moisture, medium moisture]
     phi_wh = [[(h / (H_max - 1)) * phi_max[w] for h in H] for w in W]
+
+    # U_w = [min(sum(Q_gw[g][w] for g in G), Q_k_max*len(C)) for w in W]  # Upper bound on waste flow of type w (can be tightened based on data)
+    # A waste type w cannot flow trough network in an amount larger than: (i) total generated amount, (ii) total transfer-station capacity, (iii) total co-processing capacity
+    U_w = [min(total_Q_gen_per_w[w], sum(Q_s), Q_k_max*len(C)) for w in W]  # Upper bound on waste flow of type w (can be tightened based on data)
+    budget_municipality = 800_000_000.0  # scale up vs small toy
+    # budget_availability = 0.9   # Only 90% of the maximum total potential waste flow to kilns can be subsidized supposing maximum subsidy levels, 
+    #                             # to create a more realistic budget constraint that requires trade-offs in subsidy allocation
+    # budget_municipality = budget_availability * sum(phi_max[w] * U_w[w] for w in W)  # Set municipal budget based on maximum potential subsidy payout with some availability factor
 
     # -----------------------------
     # FOLLOWER: coal types, costs, kiln demands
@@ -270,7 +275,6 @@ def generate_instance(seed: int = 7) -> InstanceData:
     fixcost_invest_unscaled_k = [capex_ann[k] + opex_fix_ann[k] for k in K]
     fixcost_invest_k = [cost/1000 for cost in fixcost_invest_unscaled_k]     # divide by 1000 to scale down to daily cost, because only 0.1% of annual waste is modeled in this instance
 
-    total_Q_gen_per_w = [sum(Q_gw[g][w] for g in G) for w in W]
     # Big-M value for cut generation
     M_primal = {
         'F3': 1,
@@ -298,10 +302,6 @@ def generate_instance(seed: int = 7) -> InstanceData:
         'pi_q_scw': 1e4,   # Big-M for dual variable of constraint limiting quantity of waste allocated from transfer station to cement plant
         'pi_r_sw': 1e4,    # Big-M for dual variable of constraint limiting residual waste at transfer station after allocation
     }
-
-    # U_w = [min(sum(Q_gw[g][w] for g in G), Q_k_max*len(C)) for w in W]  # Upper bound on waste flow of type w (can be tightened based on data)
-    # A waste type w cannot flow trough network in an amount larger than: (i) total generated amount, (ii) total transfer-station capacity, (iii) total co-processing capacity
-    U_w = [min(total_Q_gen_per_w[w], sum(Q_s), Q_k_max*len(C)) for w in W]  # Upper bound on waste flow of type w (can be tightened based on data)
 
     return InstanceData(
         G_max=G_max, S_max=S_max, W_max=W_max, I_max=I_max, L_max=L_max, C_max=C_max,
