@@ -5,7 +5,7 @@ from pathlib import Path
 import math
 import gurobipy as gp
 
-from Instances.instance_loader import InstanceData
+from Instances.archieve.instance_loader import InstanceData
 from .MP_KKT_ModelReformulation_Multi import MasterProblem
 from .SP1_ModelReformulation import SubProblem1
 from .SP2_ModelReformulation import SubProblem2

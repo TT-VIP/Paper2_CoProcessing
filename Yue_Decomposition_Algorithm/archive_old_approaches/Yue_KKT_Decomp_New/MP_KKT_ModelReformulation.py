@@ -2,7 +2,7 @@ import gurobipy as gp
 from gurobipy import GRB
 import logging
 
-from Instances.instance_loader import InstanceData
+from Instances.archieve.instance_loader import InstanceData
 
 from typing import Dict, Tuple, Any
 from dataclasses import dataclass

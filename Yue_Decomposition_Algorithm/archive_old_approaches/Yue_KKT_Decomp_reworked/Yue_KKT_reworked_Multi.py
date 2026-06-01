@@ -9,7 +9,7 @@ from enum import Enum, auto         # define a set of named constant values for 
 from dataclasses import dataclass
 from typing import Optional
 
-from Instances.instance_loader import InstanceData
+from Instances.archieve.instance_loader import InstanceData
 from .MP_reworked_Multi import MasterProblem, MasterSolution
 from .SP1_reworked import SubProblem1, SubProblem1Solution
 from .SP2_reworked import SubProblem2, SubProblem2Solution

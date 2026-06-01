@@ -8,8 +8,8 @@ ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-# from Yue_KKT_Decomp_numerics.Yue_KKT_numerics import run_yue_decomposition
-from Yue_KKT_Decomp_numerics.Yue_KKT_sos1 import run_yue_decomposition
+from Yue_KKT_Decomp_numerics.Yue_KKT_numerics import run_yue_decomposition
+# from Yue_KKT_Decomp_numerics.Yue_KKT_sos1 import run_yue_decomposition
 # from Yue_KKT_Decomp_reworked.Yue_KKT_reworked_Multi import main
 from Yue_KKT_Decomp_Normalization.Normalization import determine_normalization_bounds
 from Instances.instance_generator_normalized import read_instanceData_from_json, read_instance_metadata_from_json
@@ -17,7 +17,7 @@ from Instances.instance_generator_normalized import read_instanceData_from_json,
 def setup_logger(instance_name: str) -> None:
     """Setup logging to file and console"""
     # Create solutions folder if it doesn't exist
-    log_dir = Path(__file__).parent / "Yue_KKT_Decomp_numerics" / "solutions"
+    log_dir = Path(__file__).parent / "Yue_KKT_Decomp_numerics" / "solutions" / "medium"
     log_dir.mkdir(exist_ok=True)
     
     # Create log filename with date and time
@@ -53,9 +53,9 @@ def log_instance_metadata(metadata: dict) -> None:
 
 if __name__ == "__main__":
     # instance = make_shanghai_instance_effective()  # Load instance data (can be replaced with other instances)
-    instance_path = Path(__file__).parent.parent / "Instances" / "generated_instances"
-    instance = read_instanceData_from_json(instance_path / "instance_m_base_normal_001.json")
-    instance_metadata = read_instance_metadata_from_json(instance_path / "instance_m_base_normal_001.json")
+    instance_path = Path(__file__).parent.parent / "Instances" / "generated_instances" / "medium"
+    instance = read_instanceData_from_json(instance_path / "instance_m_base_001.json")
+    instance_metadata = read_instance_metadata_from_json(instance_path / "instance_m_base_001.json")
     instance_name = instance_metadata['instance_id']
 
     log_path = setup_logger(instance_name)

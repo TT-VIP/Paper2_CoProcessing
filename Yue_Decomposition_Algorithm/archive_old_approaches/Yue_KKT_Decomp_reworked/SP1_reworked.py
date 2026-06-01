@@ -3,7 +3,7 @@ from gurobipy import GRB
 import logging
 
 from .MP_reworked import MasterSolution
-from Instances.instance_loader import InstanceData
+from Instances.archieve.instance_loader import InstanceData
 
 from typing import Dict, Tuple
 from dataclasses import dataclass

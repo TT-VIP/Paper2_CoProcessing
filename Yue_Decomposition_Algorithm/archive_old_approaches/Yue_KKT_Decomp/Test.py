@@ -6,7 +6,7 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from Instances.instance_loader import InstanceData
+from Instances.archieve.instance_loader import InstanceData
 from Yue_Decomposition_Algorithm.Yue_KKT_Decomp_New.MP_KKT_ModelReformulation import MasterProblem
 from Yue_Decomposition_Algorithm.Yue_KKT_Decomp_New.SP1_ModelReformulation import SubProblem1
 from Yue_Decomposition_Algorithm.Yue_KKT_Decomp_New.SP2_ModelReformulation import SubProblem2
