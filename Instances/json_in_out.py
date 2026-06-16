@@ -3,7 +3,7 @@ import json
 from typing import Any, Dict, List
 from dataclasses import asdict
 
-from instance_generator_final import InstanceData, generate_instance
+from .instance_generator_final import InstanceData, generate_instance
 
 
 #region JSON serialization
@@ -112,7 +112,9 @@ def write_instance_to_json(
         },
         
         "network_settings": {
-            "city_size": instance_parameters["city_size"],
+            "city_size_x": instance_parameters["city_size_x"],
+            "city_size_y": instance_parameters["city_size_y"],
+            "city_area": instance_parameters["city_size_x"] * instance_parameters["city_size_y"],
             "grid_cell_size": instance_parameters["grid_cell_size"],
             "waste_gen_density": instance_parameters["waste_gen_density"],
 
@@ -186,6 +188,7 @@ def read_instanceData_from_json(json_path: Path) -> InstanceData:
 
     # Convert JSON string keys back to ints for indexed Big-M values
     data['M_primal']['F4'] = _keys_to_int(data['M_primal']['F4'])
+    data['M_primal']['F6'] = _keys_to_int_recursive(data['M_primal']['F6'])
     data['M_primal']['r_sw'] = _keys_to_int_recursive(data['M_primal']['r_sw'])
     data['M_primal']['q_cf'] = _keys_to_int_recursive(data['M_primal']['q_cf'])
     data['M_primal']['q_scw'] = _keys_to_int_recursive(data['M_primal']['q_scw'])
@@ -255,15 +258,16 @@ def read_instance_metadata_from_json(json_path: Path) -> Dict[str, Any]:
 #region Run instance generator
 # call the script to generate an instance and save to JSON within the python environment (can be adapted to command-line arguments if needed)
 if __name__ == "__main__":
-    instance_name = "instance_s_base_001.json"
+    instance_name = "instance_m_base_001.json"
     
     instance_parameters = {
-        "S_total": 4,
-        "I_total": 3,
+        "S_total": 8,
+        "I_total": 6,
         "L_total": 2,
-        "C_total": 3,
+        "C_total": 4,
 
-        "city_size": 20.0,
+        "city_size_x": 40.0,
+        "city_size_y": 30.0,
         "grid_cell_size": 10.0,
         "waste_gen_density": 2500,
 
@@ -274,7 +278,7 @@ if __name__ == "__main__":
 
         "landfill_radius_min": 40.0,
         "landfill_radius_max": 120.0,
-        "landfill_radius_center": 75.0,
+        "landfill_radius_center": 65.0,
         
         "cement_radius_min": 80.0,
         "cement_radius_max": 250.0,
@@ -284,7 +288,7 @@ if __name__ == "__main__":
     }
 
     output_path = write_instance_to_json(
-        output_path=Path(__file__).parent / "generated_instances" / instance_name,
+        output_path=Path(__file__).parent / "generated_instances" / "medium" / instance_name,
         instance_id=instance_name[:-5],  # Remove ".json" extension
         size_class="medium",
         structural_regime="baseline",

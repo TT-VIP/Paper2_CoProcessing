@@ -131,7 +131,8 @@ CoordinateDict = Dict[int, Point]
 # and thus the generation points are not really random, but rather determined by the urban structure; this also keeps the TD 
 # matrices consistent across different runs and allows for more meaningful analysis of the results
 def generate_waste_generation_points(
-    city_size: float,
+    city_size_x: float,
+    city_size_y: float,
     cell_size: float,
     center: Point = (0.0, 0.0),
 ) -> CoordinateDict:
@@ -139,43 +140,45 @@ def generate_waste_generation_points(
     Generate deterministic grid-cell centers for the urban demand area.
 
     Example:
-        city_size = 40, cell_size = 10
-        -> 4 x 4 = 16 generation spots.
+        city_size_x = 40, city_size_y = 30, cell_size = 10
+        -> 4 x 3 = 12 generation spots.
     """
-    if city_size <= 0:
-        raise ValueError("city_size must be positive.")
+    if city_size_x <= 0 or city_size_y <= 0:
+        raise ValueError("city_size_x and city_size_y must be positive.")
     if cell_size <= 0:
         raise ValueError("cell_size must be positive.")
-    if not math.isclose(city_size / cell_size, round(city_size / cell_size)):
-        raise ValueError("city_size must be divisible by cell_size.")
+    if not math.isclose(city_size_x / cell_size, round(city_size_x / cell_size)) or not math.isclose(city_size_y / cell_size, round(city_size_y / cell_size)):
+        raise ValueError("city_size_x and city_size_y must be divisible by cell_size.")
 
-    n_cells_axis = int(round(city_size / cell_size))
-    half = city_size / 2.0
+    n_cells_axis_x = int(round(city_size_x / cell_size))
+    n_cells_axis_y = int(round(city_size_y / cell_size))
+    half_x = city_size_x / 2.0
+    half_y = city_size_y / 2.0
     cx, cy = center
 
     points: CoordinateDict = {}
     idx = 0
 
-    for ix in range(n_cells_axis):
-        for iy in range(n_cells_axis):
-            x = cx - half + (ix + 0.5) * cell_size
-            y = cy - half + (iy + 0.5) * cell_size
+    for ix in range(n_cells_axis_x):
+        for iy in range(n_cells_axis_y):
+            x = cx - half_x + (ix + 0.5) * cell_size
+            y = cy - half_y + (iy + 0.5) * cell_size
             points[idx] = (x, y)
             idx += 1
 
     return points
 
 # Function to compute the number of generation points based on city size and cell size parameters
-def compute_grid_generation_count(city_size: float, cell_size: float) -> int:
-    if city_size <= 0:
-        raise ValueError("city_size must be positive.")
+def compute_grid_generation_count(city_size_x: float, city_size_y: float, cell_size: float) -> int:
+    if city_size_x <= 0 or city_size_y <= 0:
+        raise ValueError("city_size_x and city_size_y must be positive.")
     if cell_size <= 0:
         raise ValueError("cell_size must be positive.")
-    if not math.isclose(city_size / cell_size, round(city_size / cell_size)):
-        raise ValueError("city_size must be divisible by cell_size.")
-    
-    cells_per_axis = int(round(city_size / cell_size))
-    return cells_per_axis ** 2
+    if not math.isclose(city_size_x / cell_size, round(city_size_x / cell_size)) or not math.isclose(city_size_y / cell_size, round(city_size_y / cell_size)):
+        raise ValueError("city_size_x and city_size_y must be divisible by cell_size.")
+    n_cells_axis_x = int(round(city_size_x / cell_size))
+    n_cells_axis_y = int(round(city_size_y / cell_size))
+    return n_cells_axis_x * n_cells_axis_y
 #endregion
 
 #region Transfer placement
@@ -184,7 +187,8 @@ def compute_grid_generation_count(city_size: float, cell_size: float) -> int:
 def generate_transfer_stations(
     n_points: int,
     rng: random.Random,
-    city_size: float,
+    city_size_x: float,
+    city_size_y: float,
     center: Point = (0.0, 0.0),
 ) -> CoordinateDict:
     """
@@ -194,19 +198,32 @@ def generate_transfer_stations(
     The method creates a coarse grid with at least n_points cells, randomly
     selects n_points cells, and places one point randomly inside each selected cell.
     """
+    if city_size_x <= 0 or city_size_y <= 0:
+        raise ValueError("city_size_x and city_size_y must be positive.")
     if n_points <= 0:
         raise ValueError("n_points must be positive.")
 
     cx, cy = center
-    half = city_size / 2.0
+    half_x = city_size_x / 2.0
+    half_y = city_size_y / 2.0
 
-    n_axis = math.ceil(math.sqrt(n_points))
-    coarse_cell_size = city_size / n_axis
+    aspect_ratio = city_size_x / city_size_y
+    n_axis_x = math.ceil(math.sqrt(n_points * aspect_ratio))
+    n_axis_y = math.ceil(n_points / n_axis_x)
+
+    while n_axis_x * n_axis_y < n_points:
+        if n_axis_x * n_axis_y < n_points:
+            n_axis_y += 1
+        if n_axis_x * n_axis_y < n_points:
+            n_axis_x += 1
+
+    coarse_cell_size_x = city_size_x / n_axis_x
+    coarse_cell_size_y = city_size_y / n_axis_y
 
     candidate_cells = [
         (ix, iy)
-        for ix in range(n_axis)
-        for iy in range(n_axis)
+        for ix in range(n_axis_x)
+        for iy in range(n_axis_y)
     ]
 
     selected_cells = rng.sample(candidate_cells, n_points)
@@ -214,10 +231,10 @@ def generate_transfer_stations(
     points: CoordinateDict = {}
 
     for idx, (ix, iy) in enumerate(selected_cells):
-        xmin = cx - half + ix * coarse_cell_size
-        xmax = xmin + coarse_cell_size
-        ymin = cy - half + iy * coarse_cell_size
-        ymax = ymin + coarse_cell_size
+        xmin = cx - half_x + ix * coarse_cell_size_x
+        xmax = xmin + coarse_cell_size_x
+        ymin = cy - half_y + iy * coarse_cell_size_y
+        ymax = ymin + coarse_cell_size_y
 
         points[idx] = (
             rng.uniform(xmin, xmax),
@@ -292,7 +309,8 @@ def generate_grid_based_network_locations(
     L: range,
     C: range,
     rng: random.Random,
-    city_size: float = 30.0,
+    city_size_x: float = 30.0,
+    city_size_y: float = 30.0,
     grid_cell_size: float = 10.0,
     incinerator_radius_min: float = 10.0,
     incinerator_radius_max: float = 60.0,
@@ -315,7 +333,8 @@ def generate_grid_based_network_locations(
     """
 
     waste_generation_points = generate_waste_generation_points(
-        city_size=city_size,
+        city_size_x=city_size_x,
+        city_size_y=city_size_y,
         cell_size=grid_cell_size,
         center=center,
     )
@@ -335,7 +354,8 @@ def generate_grid_based_network_locations(
     S_coords = generate_transfer_stations(
         n_points=len(S),
         rng=rng,
-        city_size=city_size,
+        city_size_x=city_size_x,
+        city_size_y=city_size_y,
         center=center,
     )
 
@@ -709,7 +729,8 @@ def allocate_absolute_capacity_classes(
 #region Waste Generation
 def sample_total_waste_generation(
     rng,
-    city_size_km: float,
+    city_size_x: float,
+    city_size_y: float,
     waste_density_t_per_km2_year: float = 3000.0,
     lower_factor: float = 0.8,
     upper_factor: float = 1.4,
@@ -734,7 +755,8 @@ def sample_total_waste_generation(
     float
         Annual MSW generation in tonnes/year.
     """
-    mean_gen = waste_density_t_per_km2_year * city_size_km**2
+    city_area = city_size_x * city_size_y
+    mean_gen = waste_density_t_per_km2_year * city_area
     min_gen = lower_factor * mean_gen
     max_gen = upper_factor * mean_gen
 
@@ -811,7 +833,8 @@ def generate_instance(
         I_total: int,
         L_total: int,
         C_total: int,
-        city_size: float = 30.0,
+        city_size_x: float = 30.0,
+        city_size_y: float = 30.0,
         grid_cell_size: float = 10.0,
         waste_gen_density: int = 3000,     # effective annual waste intensity in chinese mega cities 2500-4000 t/km² per year
         incinerator_radius_min: float = 10.0,
@@ -857,7 +880,11 @@ def generate_instance(
     # "Anhui Conch Cement (cluster)", "Suzhou Dahua Marine", "Jiangsu Pengfei (Haian)", "Zhejiang Producer A", "Jiangsu Producer A","Anhui Producer A"
     cement_names = [f"Cement Plant {i+1}" for i in C]  # Placeholder names; replace with actual names if desired
 
-    G_max = compute_grid_generation_count(city_size, grid_cell_size)
+    G_max = compute_grid_generation_count(
+        city_size_x=city_size_x, 
+        city_size_y=city_size_y, 
+        cell_size=grid_cell_size
+    )
     G = range(G_max)
 
     # -----------------------------
@@ -874,7 +901,8 @@ def generate_instance(
         L=L,
         C=C,
         rng=rng,
-        city_size=city_size,
+        city_size_x=city_size_x,
+        city_size_y=city_size_y,
         grid_cell_size=grid_cell_size,
         incinerator_radius_min=incinerator_radius_min,
         incinerator_radius_max=incinerator_radius_max,
@@ -957,8 +985,8 @@ def generate_instance(
     epsilon_kiln_f = [2.25]   # epsilon_kiln_f = [2.25, 2.59]
 
     c_truck = 0.45      # CNY/t-km
-    c_land = 80.0       # CNY/t
-    c_inc = 100.0       # CNY/t
+    c_land = 180.0       # CNY/t
+    c_inc = 200.0       # CNY/t
 
     # -----------------------------
     # WASTE GENERATION (t/year):
@@ -967,7 +995,12 @@ def generate_instance(
     # Split by type: 40-70% high moisture, rest medium moisture.
     # -----------------------------
     # total_target = rng.randint(6_000_000, 9_000_000)
-    total_target = sample_total_waste_generation(rng, city_size, waste_density_t_per_km2_year=waste_gen_density)
+    total_target = sample_total_waste_generation(
+        rng=rng, 
+        city_size_x=city_size_x, 
+        city_size_y=city_size_y, 
+        waste_density_t_per_km2_year=waste_gen_density
+    )
     # split = [0.55, 0.45]      # fixed split
     # distribute by district (G) using a Dirichlet-like random split
     weights = [rng.random() for _ in G]
@@ -1009,7 +1042,7 @@ def generate_instance(
         n_facilities=S_total,
         rng=rng,
         capacity_classes=Q_s_classes,
-        class_probabilities=[0.20, 0.30, 0.20, 0.10, 0.10, 0.10],
+        class_probabilities=[0.31, 0.40, 0.20, 0.03, 0.03, 0.03],
         enforce_total=True,
         upgrade_rule="random",
     )
@@ -1128,6 +1161,7 @@ def generate_instance(
         # 'F4': max(alpha_c)*kappa_coproc+10,     # Maximmum energy content in co-processing
         'F4': {c: (alpha_c[c]*kappa_coproc) + 1 for c in C},     # Maximmum energy content in co-processing
         'F5': Q_k_max+1,                        # Maximum co-processing quantity (not really needed, because x_ck_fixed is already fixed in the OC block, thus the maximal capacity is deterministic based on the fixed investment decision; keep it for fallback)
+        'F6': {s: {w: float(min(sum(Q_gw[g][w] for g in G), Q_s[s])) for w in W} for s in S},  # Maximum waste flow from transfer station s to kiln c based on total generation and station capacity
         # 'q_cf': max(alpha_c)+1,                 # Maximum quantity of coal processed at cement plant (based on maximum energy content needed)
         # since alpha_c is in GJ and beta_f is in GJ/t, a physically meaningful coal bound is closer to alpha_c[c] / beta_f[f] + 1.0
         'q_cf': {c: {f: alpha_c[c] / beta_f[f] + 1 for f in F} for c in C},   # Maximum quantity of coal processed at cement plant (based on maximum energy content needed)
@@ -1144,6 +1178,7 @@ def generate_instance(
         'lam_F3': min(price_f[f] / beta_f[f] for f in F) + 1,     # Big-M for dual variable of constraint F3 (energy fulfillment constraint)
         'lam_F4': 1e4,     # Big-M for dual variable of constraint F4 (maximum co-processing quantity)
         'lam_F5': 1e4,     # Big-M for dual variable of constraint F5 (co-process capacity limited by investment decision)
+        'lam_F6': 1e4,     # Big-M for dual variable of constraint F6 (waste flow from transfer station to kiln limited by generation and station capacity)
         # derived from stationarity for q_cf: data.price_f[f] - lam_F3[c]*data.beta_f[f] - pi_q_cf[c,f] == 0 with lam_F3 >= 0 and beta_f >= 8, so price_f is a reasonable upper bound for pi_q_cf
         'pi_q_cf': max(price_f)+1,    # Big-M for dual variable of constraint limiting quantity of coal processed at cement plant
         'pi_q_scw': 1e4,   # Big-M for dual variable of constraint limiting quantity of waste allocated from transfer station to cement plant
@@ -1194,7 +1229,8 @@ if __name__ == "__main__":
         L_total=3,
         C_total=6,
 
-        city_size=30.0,
+        city_size_x=30.0,
+        city_size_y=30.0,
         grid_cell_size=10.0,
         waste_gen_density=3000,
 
