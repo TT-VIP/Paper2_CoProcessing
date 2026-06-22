@@ -10,7 +10,8 @@ from dataclasses import dataclass
 from typing import Optional
 
 from Instances.instance_generator_normalized import InstanceData
-from .MP_ineq_bigM import MasterProblem, MasterSolution
+from .MP_ineq_bigM import MasterProblem as BigMMasterProblem, MasterSolution
+from .MP_ineq_SOS1 import MasterProblem as SOS1MasterProblem
 from .SP1_ineq import SubProblem1, SubProblem1Solution
 from .SP2_ineq import SubProblem2, SubProblem2Solution
 
@@ -148,7 +149,7 @@ def setup_logger() -> None:
 #endregion
 
 #region Helper functions for logging and big-M analysis in OC blocks
-def log_bigM_binding(mp: MasterProblem, data: InstanceData, *, tol_ratio: float = 1e-3) -> None:
+def log_bigM_binding(mp: BigMMasterProblem, data: InstanceData, *, tol_ratio: float = 1e-3) -> None:
     """
     Logs if any big-M caps appear binding in any OC block.
     
@@ -289,6 +290,178 @@ def log_bigM_binding(mp: MasterProblem, data: InstanceData, *, tol_ratio: float 
         logging.info("[BigM] No big-M caps appear binding at the chosen tolerance.")
 #endregion
 
+#region check duality cut weakness
+def log_sos1_primal_dual_residuals(mp, data: InstanceData, *, tol: float = 1e-5) -> None:
+    """
+    Diagnostic for SOS1 KKT blocks.
+
+    Compares:
+        theta_tilde
+        exact dual expression using current A_sw
+        safe dual expression using U_A_sw
+
+    Main quantities:
+        exact_residual = theta_tilde - dual_exact
+        safe_residual  = theta_tilde - dual_safe
+        conservatism   = dual_exact - dual_safe
+                       = sum_{s,w} (U_A_sw - A_sw) * lambda_F6[s,w] >= 0
+
+    Interpretation:
+        - exact_residual near 0: KKT block is internally coherent.
+        - safe_residual large but exact_residual near 0: Kleinert cut is weak due to U_A_sw.
+        - exact_residual significantly negative: likely modelling/sign/numerical issue.
+        - exact_residual significantly positive: KKT/SOS1 not tight at incumbent or degeneracy/numerics.
+    """
+    if not hasattr(mp, "kkt_oc_blocks") or not mp.kkt_oc_blocks:
+        logging.info("[SOS1-PD] No KKT-OC blocks available.")
+        return
+
+    def qgen_w(w: int) -> float:
+        return float(sum(data.Q_gw[g][w] for g in data.G))
+
+    def structural_U_A(s: int, w: int) -> float:
+        return float(min(qgen_w(w), data.Q_s[s]))
+
+    logging.info("\n[SOS1-PD] Exact primal-dual residual diagnostics")
+
+    worst_abs_exact_residual = 0.0
+    worst_block = None
+
+    for ell, oc in mp.kkt_oc_blocks.items():
+
+        # ------------------------------------------------------------
+        # Pattern-specific installed capacity
+        # ------------------------------------------------------------
+        cap_c = {
+            c: float(sum(int(round(oc.x_ck_fixed[(c, k)])) * data.Q_k[k] for k in data.K))
+            for c in data.C
+        }
+
+        # ------------------------------------------------------------
+        # Current leader-induced availability A_sw at MP incumbent
+        # ------------------------------------------------------------
+        A_sw = {}
+        U_A_sw = {}
+
+        for s in data.S:
+            for w in data.W:
+                A_sw[(s, w)] = (
+                    sum(float(mp.q_gsw[g, s, w].X) for g in data.G)
+                    - sum(float(mp.q_slw[s, l, w].X) for l in data.L)
+                    - sum(float(mp.q_siw[s, i, w].X) for i in data.I)
+                )
+                U_A_sw[(s, w)] = structural_U_A(s, w)
+
+        # ------------------------------------------------------------
+        # theta_tilde: reduced primal objective in the KKT block
+        # ------------------------------------------------------------
+        theta_tilde = (
+            sum(
+                float(oc.q_cf[c, f].X) * data.price_f[f]
+                for c in data.C for f in data.F
+            )
+            + sum(
+                float(oc.q_scw[s, c, w].X)
+                * (
+                    data.c_preproc_w[w]
+                    + data.c_truck * data.TD_sc[s][c]
+                    - data.c_penalty
+                )
+                for s in data.S for c in data.C for w in data.W
+            )
+            - sum(
+                data.phi_wh[w][h] * float(oc.y_wh_KKT[w, h].X)
+                for w in data.W for h in data.H
+            )
+        )
+
+        # ------------------------------------------------------------
+        # Exact dual value using current A_sw
+        # ------------------------------------------------------------
+        dual_exact = (
+            sum(data.alpha_c[c] * float(oc.lam_F3[c].X) for c in data.C)
+            - sum(
+                data.kappa_coproc * data.alpha_c[c] * float(oc.lam_F4[c].X)
+                for c in data.C
+            )
+            - sum(cap_c[c] * float(oc.lam_F5[c].X) for c in data.C)
+            - sum(
+                A_sw[(s, w)] * float(oc.lam_F6[s, w].X)
+                for s in data.S for w in data.W
+            )
+        )
+
+        # ------------------------------------------------------------
+        # Safe dual value used in the implemented Kleinert inequality
+        # ------------------------------------------------------------
+        dual_safe = (
+            sum(data.alpha_c[c] * float(oc.lam_F3[c].X) for c in data.C)
+            - sum(
+                data.kappa_coproc * data.alpha_c[c] * float(oc.lam_F4[c].X)
+                for c in data.C
+            )
+            - sum(cap_c[c] * float(oc.lam_F5[c].X) for c in data.C)
+            - sum(
+                U_A_sw[(s, w)] * float(oc.lam_F6[s, w].X)
+                for s in data.S for w in data.W
+            )
+        )
+
+        exact_residual = theta_tilde - dual_exact
+        safe_residual = theta_tilde - dual_safe
+        conservatism = dual_exact - dual_safe
+
+        worst_abs_exact_residual = max(worst_abs_exact_residual, abs(exact_residual))
+        if worst_abs_exact_residual == abs(exact_residual):
+            worst_block = ell
+
+        # ------------------------------------------------------------
+        # Optional detail: which F6 rows cause conservatism?
+        # ------------------------------------------------------------
+        f6_terms = []
+        for s in data.S:
+            for w in data.W:
+                lam = float(oc.lam_F6[s, w].X)
+                if abs(lam) > tol:
+                    gap_A = U_A_sw[(s, w)] - A_sw[(s, w)]
+                    term = gap_A * lam
+                    f6_terms.append((abs(term), s, w, A_sw[(s, w)], U_A_sw[(s, w)], lam, term))
+
+        f6_terms.sort(reverse=True)
+
+        logging.info(
+            f"[SOS1-PD] OC{ell}: "
+            f"theta={theta_tilde:.6f}, "
+            f"dual_exact={dual_exact:.6f}, "
+            f"dual_safe={dual_safe:.6f}, "
+            f"exact_residual={exact_residual:.6e}, "
+            f"safe_residual={safe_residual:.6e}, "
+            f"conservatism={conservatism:.6e}"
+        )
+
+        if exact_residual < -tol:
+            logging.warning(
+                f"[SOS1-PD] WARNING OC{ell}: exact residual is negative "
+                f"({exact_residual:.6e}). Check signs, stationarity, or numerical tolerances."
+            )
+
+        if f6_terms:
+            logging.info(f"[SOS1-PD] OC{ell}: largest F6 conservatism terms:")
+            for _, s, w, A_val, U_val, lam, term in f6_terms[:5]:
+                logging.info(
+                    f"  (s={s}, w={w}): "
+                    f"A={A_val:.6f}, U_A={U_val:.6f}, "
+                    f"lambda_F6={lam:.6f}, "
+                    f"(U_A-A)*lambda={term:.6e}"
+                )
+        else:
+            logging.info(f"[SOS1-PD] OC{ell}: no positive lambda_F6 rows above tol={tol:g}.")
+
+    logging.info(
+        f"[SOS1-PD] Worst absolute exact residual: "
+        f"{worst_abs_exact_residual:.6e} in OC{worst_block}"
+    )
+
 #region Helper functions for pattern keys and solution logging
 # convert x_ck_fixed dict to a sorted tuple for consistent pattern keys in logging and cut management
 def pattern_key(x_ck_fixed: dict) -> tuple:
@@ -389,6 +562,8 @@ def run_yue_decomposition(
         weight_mon: float = 0.5,
         total_time_limit: float = 3630.0,
         shutdown_buffer: float = 30.0,
+        objective_scale: float = 1.0,
+        sos1_cuts: bool = False,
 ) -> None:
 
     # Load instance data
@@ -420,8 +595,9 @@ def run_yue_decomposition(
         return max(1.0, remaining() - shutdown_buffer)
 
     # Initialize Master Problem - L=empty set is implicit: MP starts without any OC blocks
-    mp = MasterProblem(instance_data)
-    mp.build(output_flag=1)
+    MasterProblemClass = SOS1MasterProblem if sos1_cuts else BigMMasterProblem
+    mp = MasterProblemClass(instance_data)
+    mp.build(output_flag=1, objective_scale=objective_scale)  # scale objective to help with numerical issues and big-M binding detection in early iterations
 
     best_bilevel_mp_sol = None
     best_bilevel_sp2_sol = None
@@ -511,8 +687,12 @@ def run_yue_decomposition(
                 if index in (5,10):  # Add extra spacing after transport and treatment costs for readability
                     logging.info("")
 
-        logging.info(f"\nCheck big-M bindings in MP solution:")
-        log_bigM_binding(mp, instance_data)        # Log any big-M bindings in the current MP solution
+        
+        if not sos1_cuts:  # Big-M only relevant if not using SOS1 cuts
+            logging.info(f"\nCheck big-M bindings in MP solution:")
+            log_bigM_binding(mp, instance_data)        # Log any big-M bindings in the current MP solution
+        else:
+            log_sos1_primal_dual_residuals(mp, instance_data)  # Log primal-dual residual diagnostics for SOS1 KKT blocks
         
         if remaining() <= shutdown_buffer:
             termination_reason = "Global time limit reached (after MP solve and before SP solves staerted)"
@@ -551,7 +731,7 @@ def run_yue_decomposition(
         sp2_time_limit = min(60, time_left_for_solve())
         # Solve Subproblem 2 (Bilevel Feasibility) at leader solution and SP1 follower solution
         sp2 = SubProblem2(instance_data)
-        sp2.build(mp_sol, sp1_sol, name=f"Subproblem 2 - Iteration {iteration}", output_flag=1)
+        sp2.build(mp_sol, sp1_sol, name=f"Subproblem 2 - Iteration {iteration}", output_flag=1, objective_scale=objective_scale)  # scale objective to help with numerical issues and big-M binding detection in early iterations
 
         # Print SP2 statistics after first build
         if not sp2_quality_printed:
@@ -614,7 +794,10 @@ def run_yue_decomposition(
                     generated_patterns.append(sp2_sol.x_ck)  # Store the pattern for logging and analysis
                     # Add KKT Optimality Cut to MP based on SP2 solution
                     logging.info("Adding KKT-OC block based on x_ck of SP2 solution to cut off current leader solution.")
-                    mp._add_kkt_oc_block(sp2_sol.x_ck)
+                    if sos1_cuts == True:
+                        mp._add_kkt_oc_block_sos1(sp2_sol.x_ck)
+                    else:
+                        mp._add_kkt_oc_block_bigM(sp2_sol.x_ck)
                     oc_blocks_added += 1
                     # mp._add_kkt_oc_block_sos1(sp2_sol.x_ck)
 
@@ -646,7 +829,10 @@ def run_yue_decomposition(
                     generated_patterns.append(sp1_sol.x_ck)  # Store the pattern for logging and analysis
                     # Add KKT Optimality Cut to MP based on SP1 solution
                     logging.info("Adding KKT-OC block based on x_ck of SP1 solution to cut off current leader solution.")
-                    mp._add_kkt_oc_block(sp1_sol.x_ck)
+                    if sos1_cuts:
+                        mp._add_kkt_oc_block_sos1(sp1_sol.x_ck)
+                    else:
+                        mp._add_kkt_oc_block_bigM(sp1_sol.x_ck)
                     oc_blocks_added += 1
                     # mp._add_kkt_oc_block_sos1(sp1_sol.x_ck)
 

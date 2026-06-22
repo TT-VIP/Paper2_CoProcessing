@@ -48,13 +48,11 @@ class KKTOCBlock:
     pi_q_cf: gp.tupledict
     pi_q_scw: gp.tupledict
 
-    # complementarity binaries (one per inequality)
-    bin_F3: gp.tupledict
-    bin_F4: gp.tupledict
-    bin_F5: gp.tupledict
-    bin_F6: gp.tupledict
-    bin_q_cf: gp.tupledict
-    bin_q_scw: gp.tupledict
+    # primal slack variables for SOS1 (one per inequality)
+    s_F3: gp.tupledict
+    s_F4: gp.tupledict
+    s_F5: gp.tupledict
+    s_F6: gp.tupledict
 
     # optional: store constraint handles for debugging
     constr: Dict[str, Any]
@@ -164,7 +162,7 @@ class MasterProblem:
     #endregion
 
 
-    #region Method to solve the Master problem
+    #region Solve the MP
     def solve(self, *, time_limit: int = GRB.INFINITY, mip_gap: float = 1e-4) -> None:
         # Not necessary to check, if the model is built directly within __init__
         assert self.model is not None, "Model is not built yet. Call build() before solve()."
@@ -180,6 +178,7 @@ class MasterProblem:
         logging.info(f"  → Thereof continuous variables: {self.model.NumVars - self.model.NumBinVars}\n")
 
         logging.info(f"  → Total constraints: {self.model.NumConstrs}\n\n")
+#        self.model.printStats()             # Print model statistics (number of variables, constraints, nonzeros, etc.) before solving for better understanding of model size and complexity
         self.model.Params.TimeLimit = time_limit
         self.model.Params.MIPGap = mip_gap  # Optional: set MIP gap for faster solves (e.g., 5% gap)
         self.model.Params.ScaleFlag = 2     # Enable geometric scaling to help with numerical issues and potentially improve bounds (https://link.springer.com/article/10.1007/s10589-011-9420-4)
@@ -189,7 +188,9 @@ class MasterProblem:
         # self.model.Params.FeasibilityTol = 1e-6
         # self.model.Params.OptimalityTol = 1e-6
         self.model.Params.IntFeasTol = 1e-5     # Default is 1e-5, can be tightened to 1e-6 for more precise integer solutions (at the cost of longer solve times)
+        self.model.Params.PreSOS1BigM = 0       # Disable presolve reduction of big-M values for SOS1 constraints to prevent numerical issues
         self.model.optimize()
+#        self.model.printQuality()  # Print solution quality information (e.g., MIP gap, bound, etc.) after solve
     #endregion
 
     #region Get objective
@@ -552,17 +553,21 @@ class MasterProblem:
 
     # region Add KKT-OC block 
     # (after solving SP2)
-    def _add_kkt_oc_block_bigM(self, x_ck_fixed: Dict[Tuple[int, int], int]) -> int:
+    def _add_kkt_oc_block_sos1(self, x_ck_fixed: Dict[Tuple[int, int], int]) -> int:
         """
         Method to add one KKT optimality cut block for iteration l with fixed follower pattern x_ck_fixed (from SP1 or SP2)
+        => using SOS1 constraints for complementarity instead of Big-M and binaries. Key idea:
+            for each complementarity pair (dual >= 0) ⟂ (slack >= 0), impose SOS1 constraint on (dual, slack)
+            to enforce that at most one of them can be positive, thus enforcing complementarity without big-M.
         - creates variables and constraints for the KKT optimality cut block
         - stores them in a KKTOCBlock dataclass for readability and debugging
 
-        Compared with the original formulation, r_sw is eliminated as an independent
-        lower-level variable and reconstructed through the leader-induced availability
-        A_sw. Consequently, the equality duals nu_F6 and nu_F7 as well as pi_r_sw
-        disappear. A new nonnegative multiplier lam_F6[s,w] is introduced for the
-        station-wise availability inequality.
+        block uses:
+        - reduced lower-level primal feasibility with r_sw eliminated,
+        - stationarity and nonnegative dual feasibility,
+        - SOS1 complementarity pairs instead of big-M constraints,
+        - the Yue/You optimality cut, and
+        - the Kleinert-type primal-dual strengthening inequality based on weak duality.
         """
         data = self.instance
         m = self.model
@@ -571,10 +576,44 @@ class MasterProblem:
         l = self._kkt_oc_counter
         pfx = f"OC{l}"  # prefix for variable and constraint names for this cut block
 
+        # ------------------------------------------------------------------
+        # Helpers and structural bounds for this fixed investment pattern
+        # ------------------------------------------------------------------
+        def _qgen_w(w: int) -> float:
+            return float(sum(data.Q_gw[g][w] for g in data.G))
+
+        def _cap_c(c: int) -> float:
+            return float(sum(int(round(x_ck_fixed[(c, k)])) * data.Q_k[k] for k in data.K))
+
+        cap_c = {c: _cap_c(c) for c in data.C}
+
+        # U_A_sw >= A_sw := sum_g q_gsw - sum_l q_slw - sum_i q_siw
+        # Conservative but valid: A_sw <= min(total generation of type w, transfer capacity of station s).
+        U_A_sw = {
+            (s, w): min(_qgen_w(w), float(data.Q_s[s]))
+            for s in data.S for w in data.W
+        }
+
+        # Upper bound for Q_w^l = sum_{s,c} q_scw[s,c,w] used in eta_wh = z_wh * Q_w^l.
+        # Composite structural bound from generation, installed capacity, station availability,
+        # and the energy-based co-processing limit.
+        U_Q_w = {}
+        for w in data.W:
+            gen_bound = _qgen_w(w)
+            investment_bound = sum(cap_c[c] for c in data.C)
+            availability_bound = sum(U_A_sw[(s, w)] for s in data.S)
+            energy_bound = sum(data.kappa_coproc * data.alpha_c[c] / data.beta_w[w] for c in data.C)
+            U_Q_w[w] = float(min(gen_bound, investment_bound, availability_bound, energy_bound))
+
         #region Variables KKT-OC block
+        # ------------------------------------------------------------------
+        # Variables
+        # ------------------------------------------------------------------
         # 1) Primal follower continuous variables for this cut block (same as in SP, but with suffix for this cut)
         q_cf = m.addVars(data.C, data.F, lb=0.0, vtype=GRB.CONTINUOUS, name=f"{pfx}_q_cf")
         q_scw = m.addVars(data.S, data.C, data.W, lb=0.0, vtype=GRB.CONTINUOUS, name=f"{pfx}_q_scw")
+        # eta_wh = z_wh * Q_w^l, where Q_w^l = sum_{s,c} q_scw[s,c,w] 
+        # is the total waste of type w co-processed in cement kilns in this cut block; used for linearization of subsidy cost in stationarity conditions
         y_wh_KKT = m.addVars(data.W, data.H, lb=0.0, vtype=GRB.CONTINUOUS, name=f"{pfx}_y_wh_KKT")  # for linearization of subsidy cost in stationarity conditions
 
         # 2) Dual variables for this cut block
@@ -588,12 +627,10 @@ class MasterProblem:
         pi_q_scw = m.addVars(data.S, data.C, data.W, lb=0.0, vtype=GRB.CONTINUOUS, name=f"{pfx}_pi_q_scw")
 
         # 3) Complementarity binaries for this cut block
-        bin_F3 = m.addVars(data.C, vtype=GRB.BINARY, name=f"{pfx}_bin_F3")
-        bin_F4 = m.addVars(data.C, vtype=GRB.BINARY, name=f"{pfx}_bin_F4")
-        bin_F5 = m.addVars(data.C, vtype=GRB.BINARY, name=f"{pfx}_bin_F5")
-        bin_F6 = m.addVars(data.S, data.W, vtype=GRB.BINARY, name=f"{pfx}_bin_F6")
-        bin_q_cf = m.addVars(data.C, data.F, vtype=GRB.BINARY, name=f"{pfx}_bin_q_cf")
-        bin_q_scw = m.addVars(data.S, data.C, data.W, vtype=GRB.BINARY, name=f"{pfx}_bin_q_scw")
+        s_F3 = m.addVars(data.C, lb=0.0, vtype=GRB.CONTINUOUS, name=f"{pfx}_s_F3")
+        s_F4 = m.addVars(data.C, lb=0.0, vtype=GRB.CONTINUOUS, name=f"{pfx}_s_F4")
+        s_F5 = m.addVars(data.C, lb=0.0, vtype=GRB.CONTINUOUS, name=f"{pfx}_s_F5")
+        s_F6 = m.addVars(data.S, data.W, lb=0.0, vtype=GRB.CONTINUOUS, name=f"{pfx}_s_F6")
         #endregion
 
         #region Constraints KKT-OC block
@@ -629,133 +666,108 @@ class MasterProblem:
 
         # (F1) and (F2) can be skipped because they only involve binary variables x_ck which are fixed in this cut block and do not affect the duals
         
+        # Gurobi requires two variables for SOS1 constraints, so we define the slack variable as slack = inequality >= 0, and the dual variable as lam >= 0, 
+        # and then impose SOS1 on (lam, slack) to enforce that at most one of them can be positive, thus enforcing complementarity without big-M.
+
+        # no direct primal feasibility constraint for inequalities needed, because slack = constraint; and slack >= 0
         # (F3) Energy fulfillment in cement kiln
-        # (pf1) F3 energy requirement: alpha_c - sum_f q_cf*beta_f - sum_w q_scw*beta_w <= 0
+        # original: sum_f beta_f q_cf + sum_w beta_w q_scw >= alpha_c
+        # slack_F3[c] = energy supplied - alpha_c >= 0
         m.addConstrs(
-            (data.alpha_c[c] - gp.quicksum(q_cf[c,f]*data.beta_f[f] for f in data.F) 
-             - gp.quicksum(q_scw[s,c,w]*data.beta_w[w] for s in data.S for w in data.W) <= 0 for c in data.C),
-            name=f"{pfx}_pf1_F3",
+            (s_F3[c] 
+             == gp.quicksum(q_cf[c,f]*data.beta_f[f] for f in data.F) 
+              + gp.quicksum(q_scw[s,c,w]*data.beta_w[w] for s in data.S for w in data.W) 
+              - data.alpha_c[c] for c in data.C),
+            name=f"{pfx}_slack_pf1_F3",
         )
 
-        # (pf2) F4 co-processing share: sum_w q_scw*beta_w - kappa*alpha_c <= 0
+        # (pf2) F4 co-processing energy limit
+        # original: sum_w beta_w q_scw <= kappa_coproc * alpha_c
+        # slack_F4[c] = kappa_coproc * alpha_c - waste_energy >= 0
         m.addConstrs(
-            (gp.quicksum(q_scw[s,c,w]*data.beta_w[w] for s in data.S for w in data.W) - data.kappa_coproc * data.alpha_c[c] <= 0 for c in data.C),
-            name=f"{pfx}_pf2_F4",
+            (s_F4[c] == 
+             data.kappa_coproc * data.alpha_c[c]
+             - gp.quicksum(q_scw[s,c,w]*data.beta_w[w] for s in data.S for w in data.W) 
+             for c in data.C),
+            name=f"{pfx}_slack_pf2_F4",
         )
 
-        # (pf3) F5 capacity with fixed x_ck pattern: sum_w q_scw - sum_k x_ck_fixed*Q_k <= 0
+        # (pf3) F5 investment capacity 
+        # original: sum_sw q_scw <= sum_k x_ck_fixed Q_k
+        # slack_F5[c] = installed_capacity - used_capacity >= 0
         m.addConstrs(
-            (gp.quicksum(q_scw[s,c,w] for s in data.S for w in data.W) - gp.quicksum(x_ck_fixed[(c, k)]*data.Q_k[k] for k in data.K) <= 0 for c in data.C),
-            name=f"{pfx}_pf3_F5",
+            (s_F5[c] == 
+            #  gp.quicksum(x_ck_fixed[(c, k)]*data.Q_k[k] for k in data.K)
+             cap_c[c]
+             - gp.quicksum(q_scw[s,c,w] for s in data.S for w in data.W) 
+             for c in data.C),
+            name=f"{pfx}_slack_pf3_F5",
         )
 
-        # (pf4) F6 station-wise availability: sum_c q_scw - sum_g q_gsw + sum_l q_slw + sum_i q_siw <= 0
+        # (pf4) F6 stationbalance: 
+        # original: sum_c q_scw <= - sum_g q_gsw - sum_l q_slw - sum_i q_siw
+        # slack_F6[s,w] = sum_g q_gsw - sum_l q_slw - sum_i q_siw - sum_c q_scw >= 0
         m.addConstrs(
-            (gp.quicksum(q_scw[s,c,w] for c in data.C) 
-             - gp.quicksum(self.q_gsw[g, s, w] for g in data.G)
-             + gp.quicksum(self.q_slw[s, l, w] for l in data.L)
-             + gp.quicksum(self.q_siw[s, i, w] for i in data.I) <= 0
+            (s_F6[s, w] == 
+             self._availability_expr(s,w)
+             - gp.quicksum(q_scw[s, c, w] for c in data.C)
              for s in data.S for w in data.W),
-            name=f"{pfx}_pf4_F6",
+            name=f"{pfx}_slack_pf4_F6",
         )
         # non-negativity of primal variables is already defined in variable creation, so no need to add explicitly here
 
         # ======================================================
-        # Complementary slackness constraints (using big-M and binaries)
+        # Complementary slackness constraints via SOS1
         # ======================================================
-        # (cs1) lam_F3[c] * b_F3[c] = 0, with b_F3[c] = (sum_f q_cf*beta_f + sum_w q_cw*beta_w - alpha_c) >= 0
-        m.addConstrs(
-            (lam_F3[c] <= data.M_dual["lam_F3"] * bin_F3[c] for c in data.C),
-            name=f"{pfx}_CS1_dual",
-        )
-        m.addConstrs(
-            (
-                gp.quicksum(q_cf[c, f] * data.beta_f[f] for f in data.F)
-                + gp.quicksum(q_scw[s, c, w] * data.beta_w[w] for s in data.S for w in data.W)
-                - data.alpha_c[c]
-                <= data.M_primal["F3"] * (1 - bin_F3[c])
-                for c in data.C
-            ),
-            name=f"{pfx}_CS1_constr",
-        )
-
-        # (cs2) lam_F4[c] * b_F4[c] = 0, with b_F4[c] = (kappa*alpha_c - sum_w q_cw*beta_w) >= 0
-        m.addConstrs(
-            (lam_F4[c] <= data.M_dual["lam_F4"] * bin_F4[c] for c in data.C),
-            name=f"{pfx}_CS2_dual",
-        )
-        m.addConstrs(
-            (
-                data.kappa_coproc * data.alpha_c[c]
-                - gp.quicksum(q_scw[s, c, w] * data.beta_w[w] for s in data.S for w in data.W)
-                <= data.M_primal["F4"][c] * (1 - bin_F4[c])
-                for c in data.C
-            ),
-            name=f"{pfx}_CS2_constr",
-        )
-
-        # (cs3) lam_F5[c] * b_F5[c] = 0, with b_F5[c] = (sum_k x_ck_fixed*Q_k - sum_w q_cw) >= 0
-        m.addConstrs(
-            (lam_F5[c] <= data.M_dual["lam_F5"] * bin_F5[c] for c in data.C),
-            name=f"{pfx}_CS3_dual",
-        )
-        # Use pattern-specific capacity instead of global Big-M to tighten the formulation (cap_c could be eliminated when multiplying parantheses on RHS, but kept for clarity)
-        # Safety margin 1e-6 not needed beause q_scw>=0. Thus, when cap_c=0, the complementarity constraint becomes -sum_w q_cw <= 0, which is always true. The hard zero-transport condition is already imposed by primal feasibility F5.
-        # When cap_c>0, the constraint is not restrictive for the primal variables when bin_F5[c]=0, and forces sum_w q_cw to be 0 when bin_F5[c]=1, thus satisfying complementarity.
-        for c in data.C:
-            cap_c = gp.quicksum(x_ck_fixed[(c, k)] * data.Q_k[k] for k in data.K)
-            m.addConstr(
-                (
-                    cap_c - gp.quicksum(q_scw[s, c, w] for s in data.S for w in data.W)
-                    <= cap_c * (1 - bin_F5[c])
-                ),
-                name=f"{pfx}_CS3_constr_c{c}",
-            )
         
-        # (cs4) lam_F6[s,w] * b_F6[s,w] = 0, with b_F6[s,w] = (A_sw - sum_c q_scw) >= 0
+        # Inequality constraint complementarity:
+        # lam >= 0  ⟂  slack >= 0, i.e.
+        #   lam_F3[c] ⟂ slack_F3[c]
+        #   lam_F4[c] ⟂ slack_F4[c]
+        #   lam_F5[c] ⟂ slack_F5[c]
+        #  lam_F6[s,w] ⟂ slack_F6[s,w]
+        # Implement as SOS1([lam, slack])
+        for c in data.C:
+            m.addSOS(GRB.SOS_TYPE1, [lam_F3[c], s_F3[c]], [1.0, 2.0])
+            m.addSOS(GRB.SOS_TYPE1, [lam_F4[c], s_F4[c]], [1.0, 2.0])
+            m.addSOS(GRB.SOS_TYPE1, [lam_F5[c], s_F5[c]], [1.0, 2.0])
+        
+        for s in data.S:
+            for w in data.W:
+                m.addSOS(GRB.SOS_TYPE1, [lam_F6[s,w], s_F6[s,w]], [1.0, 2.0])
+
+        # Bound complementarity:
+        # pi >= 0  ⟂  q >= 0, i.e.
+        #   pi_q_cf[c,f] ⟂ q_cf[c,f]
+        #   pi_q_scw[s,c,w] ⟂ q_scw[s,c,w]
+        for c in data.C:
+            for f in data.F:
+                m.addSOS(GRB.SOS_TYPE1, [pi_q_cf[c, f], q_cf[c, f]], [1.0, 2.0])
+
+        for s in data.S:
+            for c in data.C:
+                for w in data.W:
+                    m.addSOS(GRB.SOS_TYPE1, [pi_q_scw[s, c, w], q_scw[s, c, w]], [1.0, 2.0])
+        
+
+        # Linearization of KKT-block subsidy revenue on RHS
+        # ------------------------------------------------------------------
+        # eta_wh = z_wh * Q_w^l, Q_w^l = sum_{s,c} q_scw[s,c,w]
+        # ------------------------------------------------------------------
+        # y_wh_KKT[w,h] = z_wh[w,h] * sum_{s,c} q_scw[s,c,w]
         m.addConstrs(
-            (lam_F6[s, w] <= data.M_dual["lam_F6"] * bin_F6[s, w] for s in data.S for w in data.W),
-            name=f"{pfx}_CS4_dual",
+            (y_wh_KKT[w,h] <= self.z_wh[w,h]*U_Q_w[w] for w in data.W for h in data.H),
+            name=f"{pfx}_y_wh_KKT_def1"
         )
         m.addConstrs(
-            (
-                gp.quicksum(self.q_gsw[g, s, w] for g in data.G)
-                - gp.quicksum(self.q_slw[s, l, w] for l in data.L)
-                - gp.quicksum(self.q_siw[s, i, w] for i in data.I)
-                - gp.quicksum(q_scw[s, c, w] for c in data.C)
-                <= data.M_primal["F6"][s][w] * (1 - bin_F6[s, w])
-                for s in data.S for w in data.W
-            ),
-            name=f"{pfx}_CS4_constr",
+            (y_wh_KKT[w,h] <= gp.quicksum(q_scw[s,c,w] for s in data.S for c in data.C) for w in data.W for h in data.H),
+            name=f"{pfx}_y_wh_KKT_def2"
+        )
+        m.addConstrs(
+            (y_wh_KKT[w,h] >= gp.quicksum(q_scw[s,c,w] for s in data.S for c in data.C) - (1 - self.z_wh[w,h])*U_Q_w[w] for w in data.W for h in data.H),
+            name=f"{pfx}_y_wh_KKT_def3"
         )
 
-        # ---------------------------------------------------------------------
-        # Bound complementarity (cs5)-(cs6): pi * q = 0 with pi>=0, q>=0
-        # Pattern:
-        #   pi <= M_pi * z
-        #   q  <= M_q  * (1 - z)
-        # ---------------------------------------------------------------------
-
-        # (cs5) pi_q_scw[s,c,w] * q_scw[s,c,w] = 0
-        m.addConstrs(
-            (pi_q_scw[s, c, w] <= data.M_dual["pi_q_scw"] * bin_q_scw[s, c, w] for s in data.S for c in data.C for w in data.W),
-            name=f"{pfx}_CS5_dual_q_scw",
-        )
-        m.addConstrs(
-            (q_scw[s, c, w] <= data.M_primal["q_scw"][s][c][w] * (1 - bin_q_scw[s, c, w]) for s in data.S for c in data.C for w in data.W),
-            name=f"{pfx}_CS5_primal_q_scw",
-        )
-
-        # (cs6) pi_q_cf[c,f] * q_cf[c,f] = 0
-        m.addConstrs(
-            (pi_q_cf[c, f] <= data.M_dual["pi_q_cf"] * bin_q_cf[c, f] for c in data.C for f in data.F),
-            name=f"{pfx}_CS6_dual_q_cf",
-        )
-        m.addConstrs(
-            # (q_cf[c, f] <= data.M_primal["q_cf"] * (1 - bin_q_cf[c, f]) for c in data.C for f in data.F),
-            (q_cf[c, f] <= data.M_primal["q_cf"][c][f] * (1 - bin_q_cf[c, f]) for c in data.C for f in data.F),
-            name=f"{pfx}_CS6_primal_q_cf",
-        )
 
         # ======================================================
         # Yue Optimality Cut (minimization follower)
@@ -781,21 +793,6 @@ class MasterProblem:
 
         # ----- RIGHT HAND SIDE (KKT block variables) -----
 
-        # Linearization of KKT-block subsidy revenue on RHS
-        # y_wh_KKT[w,h] = z_wh[w,h] * sum_{s,c} q_scw[s,c,w]
-        m.addConstrs(
-            (y_wh_KKT[w,h] <= self.z_wh[w,h]*data.U_w[w] for w in data.W for h in data.H),
-            name=f"{pfx}_y_wh_KKT_def1"
-        )
-        m.addConstrs(
-            (y_wh_KKT[w,h] <= gp.quicksum(q_scw[s,c,w] for s in data.S for c in data.C) for w in data.W for h in data.H),
-            name=f"{pfx}_y_wh_KKT_def2"
-        )
-        m.addConstrs(
-            (y_wh_KKT[w,h] >= gp.quicksum(q_scw[s,c,w] for s in data.S for c in data.C) - (1 - self.z_wh[w,h])*data.U_w[w] for w in data.W for h in data.H),
-            name=f"{pfx}_y_wh_KKT_def3"
-        )
-
         rhs = (
             # Coal cost
             gp.quicksum(q_cf[c, f] * data.price_f[f] for c in data.C for f in data.F)
@@ -816,15 +813,50 @@ class MasterProblem:
         m.addConstr(lhs <= rhs + 1e-6, name=f"{pfx}_OptimalityCut")     # add small tolerance to avoid numerical issues
         #endregion
 
+        # ------------------------------------------------------------------
+        # Kleinert-type primal-dual strengthening inequality for the reduced LL LP
+        # Theta_tilde(q,z) >= alpha*lambda_F3 - kappa*alpha*lambda_F4
+        #                    - Kbar*lambda_F5 - U_A*lambda_F6
+        # Fixed investment costs are deliberately omitted on both sides.
+        # ------------------------------------------------------------------
+        theta_tilde = (
+            gp.quicksum(q_cf[c, f] * data.price_f[f] for c in data.C for f in data.F)
+            + gp.quicksum(
+                q_scw[s, c, w] * (data.c_preproc_w[w] + data.c_truck * data.TD_sc[s][c] - data.c_penalty)
+                for s in data.S for c in data.C for w in data.W
+)
+            - gp.quicksum(data.phi_wh[w][h] * y_wh_KKT[w, h] for w in data.W for h in data.H)
+        )
+
+        dual_lower_bound = (
+            gp.quicksum(data.alpha_c[c] * lam_F3[c] for c in data.C)
+            - gp.quicksum(data.kappa_coproc * data.alpha_c[c] * lam_F4[c] for c in data.C)
+            - gp.quicksum(cap_c[c] * lam_F5[c] for c in data.C)
+            - gp.quicksum(U_A_sw[(s, w)] * lam_F6[s, w] for s in data.S for w in data.W)
+        )
+
+        m.addConstr(theta_tilde >= dual_lower_bound, name=f"{pfx}_KleinertPrimalDualStrengthening")
+
         # create new KKTOCBlock with unique index l and given fixed follower pattern
         kkt_oc_block = KKTOCBlock(
             l=l,
+
             x_ck_fixed=x_ck_fixed,
-            q_cf=q_cf, y_wh_KKT=y_wh_KKT, q_scw=q_scw,
-            lam_F3=lam_F3, lam_F4=lam_F4, lam_F5=lam_F5, lam_F6=lam_F6,
-            pi_q_cf=pi_q_cf, pi_q_scw=pi_q_scw,
-            bin_F3=bin_F3, bin_F4=bin_F4, bin_F5=bin_F5, bin_F6=bin_F6,
-            bin_q_cf=bin_q_cf, bin_q_scw=bin_q_scw,
+            q_cf=q_cf,
+            q_scw=q_scw,
+            y_wh_KKT=y_wh_KKT,
+
+            lam_F3=lam_F3, 
+            lam_F4=lam_F4, 
+            lam_F5=lam_F5, 
+            lam_F6=lam_F6,
+            pi_q_cf=pi_q_cf, 
+            pi_q_scw=pi_q_scw,
+
+            s_F3=s_F3,
+            s_F4=s_F4,
+            s_F5=s_F5,
+            s_F6=s_F6,
             constr={}
         )
         self.kkt_oc_blocks[kkt_oc_block.l] = kkt_oc_block

@@ -140,7 +140,7 @@ class SubProblem2:
     #endregion
 
     #region Build model
-    def build(self, mp_solution: MasterSolution, sp1_solution: SubProblem1Solution, *, name: str = "SubProblem2", output_flag: int = 0):
+    def build(self, mp_solution: MasterSolution, sp1_solution: SubProblem1Solution, *, name: str = "SubProblem2", output_flag: int = 0, objective_scale: float = 1.0) -> None:
         '''Build the Subproblem 2 model '''
         if self._build:
             raise RuntimeError("SP2 was already built.")
@@ -174,7 +174,7 @@ class SubProblem2:
         #  ---- add variables / constraints / objective ----
         self._add_variables()
         self._add_constraints()
-        self._set_objective()
+        self._set_objective(objective_scale=objective_scale)
         # self.model.setObjective(0.0, GRB.MINIMIZE)  # Objective is zero because we are only checking feasibility of achieving SP1 optimal reaction value with the given leader decisions (SP2 is a feasibility problem)
         self.model.update()
 
@@ -507,7 +507,7 @@ class SubProblem2:
         return self.obj_total_env_leader, self.obj_total_mon_leader
 
 
-    def _set_objective(self) -> None:
+    def _set_objective(self, *, objective_scale: float = 1.0) -> None:
         '''
         Set objective function for SP2 equal to leader objectiv, using the same weighted normalization as the master problem
         (can be zero for plain feasibility check, but for Yue logic equals leader objective
@@ -536,7 +536,7 @@ class SubProblem2:
 
             # Optional: scale the objective to get values in a more reasonable range for Gurobi (e.g., between 1 and 100) to help with numerical stability 
             # and solver performance; does not change the optimal solution or the shape of the Pareto front, just scales the objective values
-            objective_scale = 100
+            # objective_scale = 100
 
             self.obj_total_env_weighted_leader = objective_scale * (data.weight_env * E_normalized)
             self.obj_total_mon_weighted_leader = objective_scale * (data.weight_mon * C_normalized)
