@@ -9,6 +9,8 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from Yue_KKT_inequalityonly.Yue_KKT_ineq import run_yue_decomposition
+# from Yue_KKT_inequalityonly.Yue_KKT_ineq_dynamicBound import run_yue_decomposition
+# from Yue_KKT_inequalityonly.Yue_KKT_ineq_dynamicDualCut import run_yue_decomposition
 # from Yue_KKT_Decomp_numerics.Yue_KKT_sos1 import run_yue_decomposition
 # from Yue_KKT_Decomp_reworked.Yue_KKT_reworked_Multi import main
 from Yue_KKT_Decomp_Normalization.Normalization import determine_normalization_bounds
@@ -67,7 +69,7 @@ if __name__ == "__main__":
     solver_time_limit = 500     # Time limit for solving MP every 5th iteration (in seconds)
     mip_gap = 1e-6              # MIP gap for the master problem
     Xi = 1e-4                   # Convergence threshold for leader objective improvement
-    max_iterations = 15         # Maximum number of iterations to prevent infinite loops
+    max_iterations = 4         # Maximum number of iterations to prevent infinite loops
     total_runtime = 3630        # Total runtime limit for the entire decomposition algorithm (in seconds)
 
     run_yue_decomposition(
