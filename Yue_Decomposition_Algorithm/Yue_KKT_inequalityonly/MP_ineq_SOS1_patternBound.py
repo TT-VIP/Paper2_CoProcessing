@@ -57,6 +57,10 @@ class KKTOCBlock:
     # optional: store constraint handles for debugging
     constr: Dict[str, Any]
 
+    # store bounds determined in OC-block
+    U_sw_F6_l: Dict[Tuple[int, int], float]
+    U_Q_w: Dict[int, float]
+
 # Class for Master Problem (P1 with limited combinations of follower variables)
 class MasterProblem:
     """
@@ -666,7 +670,8 @@ class MasterProblem:
         - stationarity and nonnegative dual feasibility,
         - SOS1 complementarity pairs instead of big-M constraints,
         - the Yue/You optimality cut, and
-        - the Kleinert-type primal-dual strengthening inequality based on weak duality.
+        - the Kleinert-type primal-dual strengthening inequality based on weak duality combined with a 
+        closed-form pattern-specific upper bound 
         """
         data = self.instance
         m = self.model
@@ -696,16 +701,67 @@ class MasterProblem:
                 for s in data.S for w in data.W
             }
 
+        #region Bound A_sw
+        def _build_active_f6_bounds(
+                cap_c: Dict[int, float],
+                U_A_sw_globalLP: Dict[Tuple[int, int], float],
+        ) -> Dict[Tuple[int, int], float]:
+            """
+            Bound A_sw on the branch where lambda_F6[s,w] can be positive
+            
+            Exploit SOS1 structure:
+            If lambda_F6[s,w] > 0, then s_F6[s,w] = 0 (i.e. it is active), 
+            because the SOS1 constraint enforces that one of (lambda_F6[s,w], s_F6[s,w]) must be zero
+            -> lambda_F6[s,w] > 0 means A_sw = sum_c q_scw[s,c,w] (the station availability is fully used)
+
+            If lambda_F6[s,w] = 0, then s_F6[s,w] >= 0, 
+            which means the station availability constraint is not binding, and A_sw can be greater than sum_c q_scw[s,c,w]
+
+
+            Derivation of the pattern-specific upper bound U_sw_F6_l:
+
+            For a fixed investment pattern, the flow to each cement plant is limited by
+            (i) the installed co-processing capacity (F5) and
+            (ii) the maximum waste amount implied by the co-processing energy limit (F4)
+
+            Summing these plant-wise limits over all cement plants yields a tight,
+            pattern-dependent bound on the total flow from transfer station s to waste
+            fraction w. The resulting bound is combined with the global LP-based bound
+            (and optionally the transfer station and waste availability limits) by taking
+            their minimum
+
+            Compared to the global bound alone, this exploits the currently selected
+            investment pattern and therefore provides a substantially tighter coefficient
+            for the F6 dual variable and the corresponding McCormick linearization
+            """
+            # data = self.instance
+            active_bounds: Dict[Tuple[int, int], float] = {}
+
+            for s in data.S:
+                for w in data.W:
+                    pattern_acceptance_bound = sum(min(cap_c[c], data.kappa_coproc * data.alpha_c[c] / data.beta_w[w]) for c in data.C)
+                    active_bounds[(s, w)] = max(0.0, min(pattern_acceptance_bound, U_A_sw_globalLP[(s, w)]))
+
+            return active_bounds
+        #endregion
+
         # Upper bound for Q_w^l = sum_{s,c} q_scw[s,c,w] used in y_wh = z_wh * Q_w^l.
         # Composite structural bound from generation, installed capacity, station availability,
         # and the energy-based co-processing limit.
+        ##################################### OLD VERSION ###########################################
+        # U_Q_w = {}
+        # for w in data.W:
+        #     gen_bound = _qgen_w(w)
+        #     investment_bound = sum(cap_c[c] for c in data.C)
+        #     availability_bound = sum(U_A_sw[(s, w)] for s in data.S)
+        #     energy_bound = sum(data.kappa_coproc * data.alpha_c[c] / data.beta_w[w] for c in data.C)
+        #     U_Q_w[w] = float(min(gen_bound, investment_bound, availability_bound, energy_bound))
         U_Q_w = {}
         for w in data.W:
             gen_bound = _qgen_w(w)
-            investment_bound = sum(cap_c[c] for c in data.C)
             availability_bound = sum(U_A_sw[(s, w)] for s in data.S)
-            energy_bound = sum(data.kappa_coproc * data.alpha_c[c] / data.beta_w[w] for c in data.C)
-            U_Q_w[w] = float(min(gen_bound, investment_bound, availability_bound, energy_bound))
+            pattern_bound = sum(min(cap_c[c], data.kappa_coproc * data.alpha_c[c] / data.beta_w[w]) for c in data.C)
+            U_Q_w[w] = float(min(gen_bound, availability_bound, pattern_bound))
 
         #region Variables KKT-OC block
         # ------------------------------------------------------------------
@@ -930,11 +986,17 @@ class MasterProblem:
             - gp.quicksum(data.phi_wh[w][h] * y_wh_KKT[w, h] for w in data.W for h in data.H)
         )
 
+        U_sw_F6_l = _build_active_f6_bounds(cap_c=cap_c, U_A_sw_globalLP=U_A_sw)
+        # Log patern-speciic F6 bounds
+        logging.info(f"\n{pfx} pattern-specific F6 bounds (U_sw_F6_l):")
+        for (s, w) in sorted(U_sw_F6_l.keys()):
+            logging.info(f"  U_sw_F6_l [s={s}, w={w}] = {U_sw_F6_l[(s, w)]:.6f}")
+
         dual_lower_bound = (
             gp.quicksum(data.alpha_c[c] * lam_F3[c] for c in data.C)
             - gp.quicksum(data.kappa_coproc * data.alpha_c[c] * lam_F4[c] for c in data.C)
             - gp.quicksum(cap_c[c] * lam_F5[c] for c in data.C)
-            - gp.quicksum(U_A_sw[(s, w)] * lam_F6[s, w] for s in data.S for w in data.W)
+            - gp.quicksum(U_sw_F6_l[(s, w)] * lam_F6[s, w] for s in data.S for w in data.W)
         )
 
         m.addConstr(theta_tilde >= dual_lower_bound, name=f"{pfx}_KleinertPrimalDualStrengthening")
@@ -959,7 +1021,10 @@ class MasterProblem:
             s_F4=s_F4,
             s_F5=s_F5,
             s_F6=s_F6,
-            constr={}
+            constr={},
+
+            U_sw_F6_l=U_sw_F6_l,
+            U_Q_w=U_Q_w,
         )
         self.kkt_oc_blocks[kkt_oc_block.l] = kkt_oc_block
 

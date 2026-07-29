@@ -195,7 +195,7 @@ class MasterProblem:
         # self.model.Params.FeasibilityTol = 1e-6
         # self.model.Params.OptimalityTol = 1e-6
         self.model.Params.IntFeasTol = 1e-5     # Default is 1e-5, can be tightened to 1e-6 for more precise integer solutions (at the cost of longer solve times)
-        # self.model.Params.PreSOS1BigM = 0       # Disable presolve reduction of big-M values for SOS1 constraints to prevent numerical issues
+        self.model.Params.PreSOS1BigM = 0       # Disable presolve reduction of big-M values for SOS1 constraints to prevent numerical issues
         self.model.optimize()
 #        self.model.printQuality()  # Print solution quality information (e.g., MIP gap, bound, etc.) after solve
     #endregion
