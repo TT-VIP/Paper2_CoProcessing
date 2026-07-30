@@ -258,7 +258,7 @@ def read_instance_metadata_from_json(json_path: Path) -> Dict[str, Any]:
 #region Run instance generator
 # call the script to generate an instance and save to JSON within the python environment (can be adapted to command-line arguments if needed)
 if __name__ == "__main__":
-    instance_name = "instance_m_base_001.json"
+    instance_name = "instance_m_base_002.json"
     
     instance_parameters = {
         "S_total": 8,
@@ -292,7 +292,7 @@ if __name__ == "__main__":
         instance_id=instance_name[:-5],  # Remove ".json" extension
         size_class="medium",
         structural_regime="baseline",
-        seed=7,
+        seed=42,
         instance_parameters=instance_parameters,
     )
     print(f"Instance generated and saved to {output_path}")

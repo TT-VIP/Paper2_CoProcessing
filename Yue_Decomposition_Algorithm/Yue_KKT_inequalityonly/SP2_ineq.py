@@ -4,7 +4,8 @@ import logging
 
 from .MP_ineq_bigM import MasterSolution
 from .SP1_ineq import SubProblem1Solution
-from Instances.instance_generator_normalized import InstanceData
+# from Instances.instance_generator_normalized import InstanceData
+from Instances.instance_generator_final import InstanceData
 
 from typing import Dict, Tuple
 from dataclasses import dataclass
@@ -200,7 +201,11 @@ class SubProblem2:
         logging.info(f"  → Time limit: {time_limit} seconds")
         logging.info("-"*60)
 
-        self.model.Params.NumericFocus = 0  # Focus on numerical issues to improve solution reliability for SP2, which is a feasibility problem and can be more sensitive to numerical issues
+        self.model.Params.NumericFocus = 2  # Focus on numerical issues to improve solution reliability for SP2, which is a feasibility problem and can be more sensitive to numerical issues
+        self.model.Params.IntFeasTol = 1e-8
+        self.model.Params.FeasibilityTol = 1e-8
+        self.model.Params.IntegralityFocus = 1
+        self.model.Params.MIPGap = 1e-6
         self.model.optimize()
     #endregion
 
@@ -440,8 +445,9 @@ class SubProblem2:
         # Since SP1 minimizes the reduced objective, SP2 must compare against the
         # same reduced value. For fixed leader decisions, this is equivalent to using
         # the original objective with the same constant added to both sides.
+        follower_objective_scale = 1_000_000
         m.addConstr(
-            self.obj_total_follower_reduced <= self.sp1_optimal_value + 1e-6,  # small tolerance to account for numerical issues
+            self.obj_total_follower_reduced / follower_objective_scale <= (self.sp1_optimal_value + 1e-6) / follower_objective_scale,  # small tolerance to account for numerical issues
         name="OptimalityConstraint"
         )
 

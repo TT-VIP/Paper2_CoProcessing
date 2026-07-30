@@ -9,7 +9,8 @@ from enum import Enum, auto         # define a set of named constant values for 
 from dataclasses import dataclass
 from typing import Optional
 
-from Instances.instance_generator_normalized import InstanceData
+# from Instances.instance_generator_normalized import InstanceData
+from Instances.instance_generator_final import InstanceData
 from .MP_ineq_bigM import MasterProblem as BigMMasterProblem, MasterSolution
 # from .MP_ineq_SOS1 import MasterProblem as SOS1MasterProblem
 # from .MP_ineq_SOS1_boundLP import MasterProblem as SOS1MasterProblem
@@ -24,6 +25,7 @@ class DecompositionStatus(Enum):
     FEASIBLE_SUBOPTIMAL = auto()
     NO_FEASIBLE_SOLUTION = auto()
     MP_INFEASIBLE_OR_NO_SOLUTION = auto()
+    NUMERICAL_BOUND_INCONSISTENCY = auto()
 
 @dataclass
 class DecompositionSolution:
@@ -47,25 +49,25 @@ class DecompositionSolution:
 
     termination_reason: Optional[str] = None
 
-    def has_feasible_solution(self) -> bool:
-        return self.best_bilevel_sp2_sol is not None
+    # def has_feasible_solution(self) -> bool:
+    #     return self.best_bilevel_sp2_sol is not None
 
-    def incumbents_match(self) -> bool:
-        if self.best_bilevel_mp_sol is None or self.best_bilevel_sp2_sol is None:
-            return False
-        # if self.best_bilevel_mp_sol.mp_obj is None or self.best_bilevel_sp2_sol.sp2_obj is None:
-        #     return False
-        return abs(self.best_bilevel_mp_sol.mp_obj - self.best_bilevel_sp2_sol.sp2_obj) <= self.equality_tol
+    # def incumbents_match(self) -> bool:
+    #     if self.best_bilevel_mp_sol is None or self.best_bilevel_sp2_sol is None:
+    #         return False
+    #     # if self.best_bilevel_mp_sol.mp_obj is None or self.best_bilevel_sp2_sol.sp2_obj is None:
+    #     #     return False
+    #     return abs(self.best_bilevel_mp_sol.mp_obj - self.best_bilevel_sp2_sol.sp2_obj) <= self.equality_tol
 
-    def is_proven_optimal(self) -> bool:
-        return (
-            math.isfinite(self.lower_bound)
-            and math.isfinite(self.upper_bound)
-            and (self.upper_bound - self.lower_bound) <= self.xi
-        )
+    # def is_proven_optimal(self) -> bool:
+    #     return (
+    #         math.isfinite(self.lower_bound)
+    #         and math.isfinite(self.upper_bound)
+    #         and (self.upper_bound - self.lower_bound) <= self.xi
+    #     )
 
-    def is_optimal_by_incumbent_match(self) -> bool:
-        return self.has_feasible_solution() and self.incumbents_match()
+    # def is_optimal_by_incumbent_match(self) -> bool:
+    #     return self.has_feasible_solution() and self.incumbents_match()
 
 def build_decomposition_solution(
     *,
@@ -92,7 +94,9 @@ def build_decomposition_solution(
     if best_bilevel_mp_obj is not None and best_bilevel_sp2_obj is not None:
         final_gap_incumbents = abs(best_bilevel_sp2_obj - best_bilevel_mp_obj)
 
-    if math.isfinite(LB) and math.isfinite(UB) and (UB - LB <= Xi):
+    if math.isfinite(LB) and math.isfinite(UB) and (final_gap_proven < -1e-8):
+        status = DecompositionStatus.NUMERICAL_BOUND_INCONSISTENCY
+    elif math.isfinite(LB) and math.isfinite(UB) and (final_gap_proven <= Xi):
         status = DecompositionStatus.OPTIMAL_PROVEN
     elif (
         best_bilevel_mp_obj is not None
@@ -570,6 +574,9 @@ def run_yue_decomposition(
         shutdown_buffer: float = 30.0,
         objective_scale: float = 1.0,
         sos1_cuts: bool = False,
+        primal_dual_strenghtening: bool = True,
+        bound_cutoff: bool = True,
+        cutoff_bound_tolerance: float = 1e-5,
 ) -> None:
 
     # Load instance data
@@ -626,6 +633,9 @@ def run_yue_decomposition(
     while iteration < max_iterations and (UB - LB > Xi) and remaining() > shutdown_buffer:
         iteration += 1
         terminate = False
+        lb_updated = False
+        ub_updated = False
+
         starttime_iteration = time.perf_counter()
 
         if Verbose:
@@ -635,7 +645,7 @@ def run_yue_decomposition(
             logging.info("="*150)
 
         if iteration <= 8:
-            base_mp_limit = 300
+            base_mp_limit = 180
         elif iteration <= 10:
             base_mp_limit = 300
         else:
@@ -695,6 +705,7 @@ def run_yue_decomposition(
         except Exception:
             new_LB = -np.inf  # Fallback to -infinity if bound is not available (incumbent not feasible because it can overestimate the follower's objective)
         LB = max(LB, new_LB)  # Ensure LB does not decrease
+        lb_updated = LB > prev_LB
         
         # solution logging
         logging.info(f"\nBest Master Problem Solution: Objective = {mp.model.ObjVal:.5f}, Bound = {mp.model.ObjBound:.5f}, Gap = {mp.model.MIPGap*100:.2f}%")
@@ -788,21 +799,33 @@ def run_yue_decomposition(
         if sp2_sol.feasible:
             # Update upper bound and best solutions if better
             if float(sp2_sol.sp2_obj) < UB:
+                prev_UB = UB
                 UB = float(sp2_sol.sp2_obj)
+                ub_updated = True
                 best_bilevel_mp_sol = mp_sol
                 best_bilevel_sp2_sol = sp2_sol
                 iteration_best_solution = iteration
-                logging.info(f"Subproblem 2 feasible. Updated Upper Bound: UB = {UB:.5f}")
+                logging.info(f"\nSubproblem 2 feasible. New UB found. UB updated from {prev_UB:.5f} to {UB:.5f}")
                 # logging.info(f'Binary combination in SP2: x_ck = {sp2_sol.x_ck}')
             else:
                 logging.info(f"Subproblem 2 feasible but no improvement. Upper Bound remains unchanged: UB = {UB:.5f}")
                 # logging.info(f'Binary combination in SP2: x_ck = {sp2_sol.x_ck}')
             
             # Check convergence or finish before adding cut
-            if UB - LB <= Xi:
+            bound_consistency_tol = 1e-8
+            bilevel_gap = UB - LB
+
+            if bilevel_gap < -bound_consistency_tol:
+                termination_reason = (f"ERROR: Numerically inconsistent bounds detected:"
+                                      f" UB = {UB:.12f} < LB = {LB:.12f}, difference = {bilevel_gap:.3e}"
+                                      f" Check solver tolerances and numerical stability.")
+                logging.error(termination_reason)
+                terminate = True
+            
+            elif bilevel_gap <= Xi:
                 logging.info(f"Convergence achieved: UB - LB <= Xi: {UB - LB:.5f} <= {Xi}")
                 logging.info("Terminating decomposition algorithm.")
-                termination_reason = "Convergence achieved based on bounds and Gap tolerance (UB - LB <= Xi)"
+                termination_reason = "Convergence achieved based on consistent bounds and Gap tolerance (UB - LB <= Xi)"
                 terminate = True
             elif iteration == max_iterations:
                 logging.info(f"Maximum iterations reached: {iteration}. Terminating decomposition algorithm.")
@@ -824,7 +847,7 @@ def run_yue_decomposition(
                     # Add KKT Optimality Cut to MP based on SP2 solution
                     logging.info("Adding KKT-OC block based on x_ck of SP2 solution to cut off current leader solution.")
                     if sos1_cuts == True:
-                        mp._add_kkt_oc_block_sos1(sp2_sol.x_ck)
+                        mp._add_kkt_oc_block_sos1(sp2_sol.x_ck, primal_dual_streghtening=primal_dual_strenghtening)
                     else:
                         mp._add_kkt_oc_block_bigM(sp2_sol.x_ck)
                     oc_blocks_added += 1
@@ -859,7 +882,7 @@ def run_yue_decomposition(
                     # Add KKT Optimality Cut to MP based on SP1 solution
                     logging.info("Adding KKT-OC block based on x_ck of SP1 solution to cut off current leader solution.")
                     if sos1_cuts:
-                        mp._add_kkt_oc_block_sos1(sp1_sol.x_ck)
+                        mp._add_kkt_oc_block_sos1(sp1_sol.x_ck, primal_dual_streghtening=primal_dual_strenghtening)
                     else:
                         mp._add_kkt_oc_block_bigM(sp1_sol.x_ck)
                     oc_blocks_added += 1
@@ -873,6 +896,15 @@ def run_yue_decomposition(
                     #     mp.model.printStats()
                     #     logging.info("="*70 + "\n")
 
+        # Update objective cutoffs if bound_cutoff is enabled
+        if not terminate:
+            if bound_cutoff:
+                mp.update_objective_cutoffs(
+                    lower_bound=LB if lb_updated else None,
+                    upper_bound=UB if ub_updated else None,
+                    tolerance=cutoff_bound_tolerance
+                )
+        
         # Iteration summary
         if Verbose:
             endtime_iteration = time.perf_counter()

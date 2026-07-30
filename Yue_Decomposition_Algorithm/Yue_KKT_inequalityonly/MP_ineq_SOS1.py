@@ -1,6 +1,7 @@
 import gurobipy as gp
 from gurobipy import GRB
 import logging
+import math
 
 from Instances.instance_generator_normalized import InstanceData
 
@@ -127,6 +128,10 @@ class MasterProblem:
         self.obj_total_env_weighted = None
         self.obj_total_mon = None
         self.obj_total_mon_weighted = None
+
+        self.objective_expression = None
+        self.objective_lb_cutoff = None
+        self.objective_ub_cutoff = None
     #endregion
 
     # =============================================================================
@@ -537,9 +542,31 @@ class MasterProblem:
             self.obj_total_env_weighted = data.weight_env * E
             self.obj_total_mon_weighted = data.weight_mon * C
 
-        objective = self.obj_total_env_weighted + self.obj_total_mon_weighted
+        self.objective_expression = self.obj_total_env_weighted + self.obj_total_mon_weighted
 
-        m.setObjective(objective, GRB.MINIMIZE)
+        m.setObjective(self.objective_expression, GRB.MINIMIZE)
+
+    def update_objective_cutoffs(
+            self,
+            *, 
+            lower_bound: float | None = None,
+            upper_bound: float | None = None,
+            tolerance: float = 1e-5
+    ) -> None:
+        
+        if lower_bound is not None and math.isfinite(lower_bound):
+            if self.objective_lb_cutoff is None:
+                self.objective_lb_cutoff = self.model.addConstr(self.objective_expression >= lower_bound - tolerance, name="Objective_Cutoff_LB")
+            else:
+                self.objective_lb_cutoff.RHS = lower_bound - tolerance
+
+        if upper_bound is not None and math.isfinite(upper_bound):
+            if self.objective_ub_cutoff is None:
+                self.objective_ub_cutoff = self.model.addConstr(self.objective_expression <= upper_bound + tolerance, name="Objective_Cutoff_UB")
+            else:
+                self.objective_ub_cutoff.RHS = upper_bound + tolerance
+
+        self.model.update()
     #endregion
 
     def _availability_expr(self, s: int, w: int) -> gp.LinExpr:

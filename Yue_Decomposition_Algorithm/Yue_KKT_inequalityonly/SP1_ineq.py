@@ -3,7 +3,8 @@ from gurobipy import GRB
 import logging
 
 from .MP_ineq_bigM import MasterSolution
-from Instances.instance_generator_normalized import InstanceData
+# from Instances.instance_generator_normalized import InstanceData
+from Instances.instance_generator_final import InstanceData
 
 from typing import Dict, Tuple
 from dataclasses import dataclass
@@ -194,7 +195,11 @@ class SubProblem1:
         logging.info(f"  → Time limit: {time_limit} seconds")
         logging.info("-"*60)
 
-        self.model.Params.NumericFocus = 0  # Focus on numerical issues to improve solution reliability for SP1
+        self.model.Params.NumericFocus = 2  # Focus on numerical issues to improve solution reliability for SP1
+        self.model.Params.IntFeasTol = 1e-8
+        self.model.Params.FeasibilityTol = 1e-8
+        self.model.Params.IntegralityFocus = 1
+        self.model.Params.MIPGap = 1e-6
         self.model.optimize()
 
     def extract_solution(self) -> SubProblem1Solution:

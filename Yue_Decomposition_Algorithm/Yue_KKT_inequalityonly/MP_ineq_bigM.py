@@ -1,8 +1,10 @@
 import gurobipy as gp
 from gurobipy import GRB
 import logging
+import math
 
-from Instances.instance_generator_normalized import InstanceData
+# from Instances.instance_generator_normalized import InstanceData
+from Instances.instance_generator_final import InstanceData
 
 from typing import Dict, Tuple, Any
 from dataclasses import dataclass
@@ -129,6 +131,10 @@ class MasterProblem:
         self.obj_total_env_weighted = None
         self.obj_total_mon = None
         self.obj_total_mon_weighted = None
+
+        self.objective_expression = None
+        self.objective_lb_cutoff = None
+        self.objective_ub_cutoff = None
     #endregion
 
     # =============================================================================
@@ -164,7 +170,7 @@ class MasterProblem:
     #endregion
 
 
-    #region Method to solve the Master problem
+    #region Solve Master Problem
     def solve(self, *, time_limit: int = GRB.INFINITY, mip_gap: float = 1e-4) -> None:
         # Not necessary to check, if the model is built directly within __init__
         assert self.model is not None, "Model is not built yet. Call build() before solve()."
@@ -183,12 +189,12 @@ class MasterProblem:
         self.model.Params.TimeLimit = time_limit
         self.model.Params.MIPGap = mip_gap  # Optional: set MIP gap for faster solves (e.g., 5% gap)
         self.model.Params.ScaleFlag = 2     # Enable geometric scaling to help with numerical issues and potentially improve bounds (https://link.springer.com/article/10.1007/s10589-011-9420-4)
-        self.model.Params.NumericFocus = 1  # Degree to which the code attempts to detect and manage numerical issues (0 - default, 3 max)
         self.model.Params.Presolve = 2      # Enable presolve to reduce problem size and potentially improve solve times
-        # Default values
-        # self.model.Params.FeasibilityTol = 1e-6
-        # self.model.Params.OptimalityTol = 1e-6
+
+        self.model.Params.NumericFocus = 1  # Degree to which the code attempts to detect and manage numerical issues (0 - default, 3 max)
         self.model.Params.IntFeasTol = 1e-5     # Default is 1e-5, can be tightened to 1e-6 for more precise integer solutions (at the cost of longer solve times)
+        self.model.Params.IntegralityFocus = 1  # Try to avoid solutions that exploit integrality tolerances, i.e. "trickle flow"
+        self.model.Params.FeasibilityTol = 1e-6  # Default is 1e-6, can be tightened to 1e-7 for more precise feasibility checks (at the cost of longer solve times)
         self.model.optimize()
     #endregion
 
@@ -536,9 +542,38 @@ class MasterProblem:
             self.obj_total_env_weighted = data.weight_env * E
             self.obj_total_mon_weighted = data.weight_mon * C
 
-        objective = self.obj_total_env_weighted + self.obj_total_mon_weighted
+        self.objective_expression = self.obj_total_env_weighted + self.obj_total_mon_weighted
 
-        m.setObjective(objective, GRB.MINIMIZE)
+        m.setObjective(self.objective_expression, GRB.MINIMIZE)
+
+    def update_objective_cutoffs(
+            self,
+            *, 
+            lower_bound: float | None = None,
+            upper_bound: float | None = None,
+            tolerance: float = 1e-5
+    ) -> None:
+        
+        cutoff_row_scale = 1_000        # scale for better numerics of the constraint matrix and RHS, but keep feasible set untouched
+        objective_constant = self.objective_expression.getConstant()
+
+        if lower_bound is not None and math.isfinite(lower_bound):
+            rhs_lb = lower_bound - tolerance - objective_constant
+
+            if self.objective_lb_cutoff is None:
+                self.objective_lb_cutoff = self.model.addConstr(cutoff_row_scale * self.objective_expression >= cutoff_row_scale * (lower_bound - tolerance), name="Objective_Cutoff_LB")
+            else:
+                self.objective_lb_cutoff.RHS = cutoff_row_scale * rhs_lb
+
+        if upper_bound is not None and math.isfinite(upper_bound):
+            rhs_ub = upper_bound + tolerance - objective_constant
+
+            if self.objective_ub_cutoff is None:
+                self.objective_ub_cutoff = self.model.addConstr(cutoff_row_scale * self.objective_expression <= cutoff_row_scale * (upper_bound + tolerance), name="Objective_Cutoff_UB")
+            else:
+                self.objective_ub_cutoff.RHS = cutoff_row_scale * rhs_ub
+
+        self.model.update()
     #endregion
 
     def _availability_expr(self, s: int, w: int) -> gp.LinExpr:

@@ -1,10 +1,12 @@
 import gurobipy as gp
 from gurobipy import GRB
 import logging
+import math
 
-from Instances.instance_generator_normalized import InstanceData
+# from Instances.instance_generator_normalized import InstanceData
+from Instances.instance_generator_final import InstanceData
 
-from typing import Dict, Tuple, Any
+from typing import Dict, Tuple, Any, Optional
 from dataclasses import dataclass
 
 
@@ -58,8 +60,9 @@ class KKTOCBlock:
     constr: Dict[str, Any]
 
     # store bounds determined in OC-block
-    U_sw_F6_l: Dict[Tuple[int, int], float]
     U_Q_w: Dict[int, float]
+    U_sw_F6_l: Optional[Dict[Tuple[int, int], float]] = None
+    
 
 # Class for Master Problem (P1 with limited combinations of follower variables)
 class MasterProblem:
@@ -131,6 +134,10 @@ class MasterProblem:
         self.obj_total_env_weighted = None
         self.obj_total_mon = None
         self.obj_total_mon_weighted = None
+
+        self.objective_expression = None
+        self.objective_lb_cutoff = None
+        self.objective_ub_cutoff = None
     #endregion
 
     # =============================================================================
@@ -186,13 +193,13 @@ class MasterProblem:
         self.model.Params.TimeLimit = time_limit
         self.model.Params.MIPGap = mip_gap  # Optional: set MIP gap for faster solves (e.g., 5% gap)
         self.model.Params.ScaleFlag = 2     # Enable geometric scaling to help with numerical issues and potentially improve bounds (https://link.springer.com/article/10.1007/s10589-011-9420-4)
-        self.model.Params.NumericFocus = 1  # Degree to which the code attempts to detect and manage numerical issues (0 - default, 3 max)
         self.model.Params.Presolve = 2      # Enable presolve to reduce problem size and potentially improve solve times
-        # Default values
-        # self.model.Params.FeasibilityTol = 1e-6
-        # self.model.Params.OptimalityTol = 1e-6
+
+        self.model.Params.NumericFocus = 1  # Degree to which the code attempts to detect and manage numerical issues (0 - default, 3 max)
         self.model.Params.IntFeasTol = 1e-5     # Default is 1e-5, can be tightened to 1e-6 for more precise integer solutions (at the cost of longer solve times)
         self.model.Params.PreSOS1BigM = 0       # Disable presolve reduction of big-M values for SOS1 constraints to prevent numerical issues
+        self.model.Params.IntegralityFocus = 1  # Focus on integrality to improve solution reliability for MP, which is a mixed-integer problem
+        self.model.Params.FeasibilityTol = 1e-6  # Default is 1e-6, can be tightened to 1e-7 for more precise feasibility checks (at the cost of longer solve times)
         self.model.optimize()
 #        self.model.printQuality()  # Print solution quality information (e.g., MIP gap, bound, etc.) after solve
     #endregion
@@ -541,11 +548,44 @@ class MasterProblem:
             self.obj_total_env_weighted = data.weight_env * E
             self.obj_total_mon_weighted = data.weight_mon * C
 
-        objective = self.obj_total_env_weighted + self.obj_total_mon_weighted
+        self.objective_expression = self.obj_total_env_weighted + self.obj_total_mon_weighted
 
-        m.setObjective(objective, GRB.MINIMIZE)
+        m.setObjective(self.objective_expression, GRB.MINIMIZE)
+
+    def update_objective_cutoffs(
+            self,
+            *, 
+            lower_bound: float | None = None,
+            upper_bound: float | None = None,
+            tolerance: float = 1e-5
+    ) -> None:
+        
+        cutoff_row_scale = 1_000  # Scale the cutoff row to avoid numerical issues with very small coefficients in the objective expression
+        objective_constant = self.objective_expression.getConstant()
+        
+        if lower_bound is not None and math.isfinite(lower_bound):
+            rhs_lb = lower_bound - tolerance - objective_constant
+            
+            if self.objective_lb_cutoff is None:
+                # During creation, Gurobi automatically moves the obj constant to the RHS
+                self.objective_lb_cutoff = self.model.addConstr(cutoff_row_scale * self.objective_expression >= cutoff_row_scale * (lower_bound - tolerance), name="Objective_Cutoff_LB")
+            else:
+                # When updating RHS, the constant mus be included explicitly because the stored row is constant free
+                # (Gurobi automatically moves the constant to the RHS during creation, so it misses in lhs)
+                self.objective_lb_cutoff.RHS = cutoff_row_scale * rhs_lb
+
+        if upper_bound is not None and math.isfinite(upper_bound):
+            rhs_ub = upper_bound + tolerance - objective_constant
+
+            if self.objective_ub_cutoff is None:
+                self.objective_ub_cutoff = self.model.addConstr(cutoff_row_scale * self.objective_expression <= cutoff_row_scale * (upper_bound + tolerance), name="Objective_Cutoff_UB")
+            else:
+                self.objective_ub_cutoff.RHS = cutoff_row_scale * rhs_ub
+
+        self.model.update()
     #endregion
 
+    #region Compute LP-Bounds
     def _availability_expr(self, s: int, w: int) -> gp.LinExpr:
         """Return A_sw = inflow to station minus direct landfill/incineration flows."""
         data = self.instance
@@ -653,10 +693,11 @@ class MasterProblem:
 
         self.U_A_sw_lp = U_A_sw
         return U_A_sw
+    #endregion
 
     # region Add KKT-OC block 
     # (after solving SP2)
-    def _add_kkt_oc_block_sos1(self, x_ck_fixed: Dict[Tuple[int, int], int]) -> int:
+    def _add_kkt_oc_block_sos1(self, x_ck_fixed: Dict[Tuple[int, int], int], *, primal_dual_streghtening: bool = True) -> int:
         """
         Method to add one KKT optimality cut block for iteration l with fixed follower pattern x_ck_fixed (from SP1 or SP2)
         => using SOS1 constraints for complementarity instead of Big-M and binaries. Key idea:
@@ -977,32 +1018,33 @@ class MasterProblem:
         #                    - Kbar*lambda_F5 - U_A*lambda_F6
         # Fixed investment costs are deliberately omitted on both sides.
         # ------------------------------------------------------------------
-        theta_tilde = (
-            gp.quicksum(q_cf[c, f] * data.price_f[f] for c in data.C for f in data.F)
-            + gp.quicksum(
-                q_scw[s, c, w] * (data.c_preproc_w[w] + data.c_truck * data.TD_sc[s][c] - data.c_penalty)
-                for s in data.S for c in data.C for w in data.W
-)
-            - gp.quicksum(data.phi_wh[w][h] * y_wh_KKT[w, h] for w in data.W for h in data.H)
-        )
+        if primal_dual_streghtening:
+            theta_tilde = (
+                gp.quicksum(q_cf[c, f] * data.price_f[f] for c in data.C for f in data.F)
+                + gp.quicksum(
+                    q_scw[s, c, w] * (data.c_preproc_w[w] + data.c_truck * data.TD_sc[s][c] - data.c_penalty)
+                    for s in data.S for c in data.C for w in data.W
+                    )
+                - gp.quicksum(data.phi_wh[w][h] * y_wh_KKT[w, h] for w in data.W for h in data.H)
+            )
 
-        U_sw_F6_l = _build_active_f6_bounds(cap_c=cap_c, U_A_sw_globalLP=U_A_sw)
-        # Log patern-speciic F6 bounds
-        logging.info(f"\n{pfx} pattern-specific F6 bounds (U_sw_F6_l):")
-        for (s, w) in sorted(U_sw_F6_l.keys()):
-            logging.info(f"  U_sw_F6_l [s={s}, w={w}] = {U_sw_F6_l[(s, w)]:.6f}")
+            U_sw_F6_l = _build_active_f6_bounds(cap_c=cap_c, U_A_sw_globalLP=U_A_sw)
+            # Log patern-speciic F6 bounds
+            logging.info(f"\n{pfx} pattern-specific F6 bounds (U_sw_F6_l):")
+            for (s, w) in sorted(U_sw_F6_l.keys()):
+                logging.info(f"  U_sw_F6_l [s={s}, w={w}] = {U_sw_F6_l[(s, w)]:.6f}")
 
-        dual_lower_bound = (
-            gp.quicksum(data.alpha_c[c] * lam_F3[c] for c in data.C)
-            - gp.quicksum(data.kappa_coproc * data.alpha_c[c] * lam_F4[c] for c in data.C)
-            - gp.quicksum(cap_c[c] * lam_F5[c] for c in data.C)
-            - gp.quicksum(U_sw_F6_l[(s, w)] * lam_F6[s, w] for s in data.S for w in data.W)
-        )
+            dual_lower_bound = (
+                gp.quicksum(data.alpha_c[c] * lam_F3[c] for c in data.C)
+                - gp.quicksum(data.kappa_coproc * data.alpha_c[c] * lam_F4[c] for c in data.C)
+                - gp.quicksum(cap_c[c] * lam_F5[c] for c in data.C)
+                - gp.quicksum(U_sw_F6_l[(s, w)] * lam_F6[s, w] for s in data.S for w in data.W)
+            )
 
-        m.addConstr(theta_tilde >= dual_lower_bound, name=f"{pfx}_KleinertPrimalDualStrengthening")
+            m.addConstr(theta_tilde >= dual_lower_bound, name=f"{pfx}_KleinertPrimalDualStrengthening")
 
         # create new KKTOCBlock with unique index l and given fixed follower pattern
-        kkt_oc_block = KKTOCBlock(
+        kkt_kwargs = dict(
             l=l,
 
             x_ck_fixed=x_ck_fixed,
@@ -1023,9 +1065,13 @@ class MasterProblem:
             s_F6=s_F6,
             constr={},
 
-            U_sw_F6_l=U_sw_F6_l,
             U_Q_w=U_Q_w,
         )
+        
+        if primal_dual_streghtening:
+            kkt_kwargs["U_sw_F6_l"] = U_sw_F6_l
+
+        kkt_oc_block = KKTOCBlock(**kkt_kwargs)
         self.kkt_oc_blocks[kkt_oc_block.l] = kkt_oc_block
 
         m.update()
