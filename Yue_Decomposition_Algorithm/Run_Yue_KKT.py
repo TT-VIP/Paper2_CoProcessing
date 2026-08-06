@@ -12,7 +12,7 @@ if str(ROOT) not in sys.path:
 # from Yue_KKT_Decomp_New.Yue_KKT_Decomp_ModelReformulation import main
 # from Yue_KKT_Decomp_New.Yue_KKT_Decomp_ModelReformulation_copy import main
 
-from Yue_KKT_Decomp_reworked.Yue_KKT_reworked import main
+from Yue_KKT_Decomp_reworked.Yue_KKT_reworked import run_yue_decomposition
 # from Yue_KKT_Decomp_reworked.Yue_KKT_reworked_Multi import main
 from Instances.shanghai_instance_effective import make_shanghai_instance_effective
 
@@ -50,4 +50,4 @@ if __name__ == "__main__":
     max_iterations = 4          # Maximum number of iterations to prevent infinite loops
     instance = make_shanghai_instance_effective()  # Load instance data (can be replaced with other instances)
 
-    main(Verbose=True, solver_time_limit=solver_time_limit, master_mip_gap=master_mip_gap, Xi=Xi, max_iterations=max_iterations, instance=instance)
+    run_yue_decomposition(Verbose=True, solver_time_limit=solver_time_limit, mip_gap=master_mip_gap, Xi=Xi, max_iterations=max_iterations, instance=instance)
