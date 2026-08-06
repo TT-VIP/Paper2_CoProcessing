@@ -83,7 +83,7 @@ if __name__ == "__main__":
         weight_mon=1.0,
         total_time_limit=total_runtime,
         objective_scale=100.0,
-        sos1_cuts=True,
+        sos1_cuts=False,
         primal_dual_strenghtening=True,
         bound_cutoff=True,
         cutoff_bound_tolerance=1e-5,

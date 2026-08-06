@@ -645,7 +645,7 @@ def run_yue_decomposition(
             logging.info("="*150)
 
         if iteration <= 8:
-            base_mp_limit = 180
+            base_mp_limit = 200
         elif iteration <= 10:
             base_mp_limit = 300
         else:
@@ -960,8 +960,23 @@ def run_yue_decomposition(
 
     def solution_summary(decomp_sol: DecompositionSolution, tol: float = 1e-6) -> None:
         logging.info("\n" + "#"*70)
-        logging.info("Decomposition Algorithm - Solution Summary:")
+        logging.info("DECOMPOSITION ALGORITHM - SOLUTION SUMMARY:")
         logging.info("#"*70)
+
+        logging.info("META PARAMETERS")
+        logging.info("-"*50)
+        logging.info(f"Instance: {instance.instance_name} (Size class: {instance.instance_size_class}, Structural regime: {instance.instance_regime})")
+        logging.info(f"Network Dimensions Total: {instance.G_max + instance.S_max + instance.I_max + instance.L_max + instance.C_max} " 
+                     f"(G = {instance.G_max}, S = {instance.S_max}, I = {instance.I_max}, L = {instance.L_max}, C = {instance.C_max})"
+                     )
+        logging.info(f"Decomposition Parameters: Xi={Xi}, Max Iterations={max_iterations}, Soution Time Limit={total_time_limit}, MIP-Gap MasterProblem={mip_gap}")
+        logging.info(f"Objective Weights: Environment={instance_data.weight_env:.2f}, Monetary={instance_data.weight_mon:.2f}")
+        logging.info(f"Complementarity Modelling: {'SOS1' if sos1_cuts else 'Big-M'}")
+        logging.info(f"Primal-Dual Strengthening: {'Enabled' if primal_dual_strenghtening else 'Disabled'}")
+        logging.info(f"Bound Cutoff: {'Enabled (tolerance {bound_cutoff_tolerance})' if bound_cutoff else 'Disabled'}")
+        logging.info("-"*50)
+
+        logging.info("SOLUTION")
         logging.info(f"Status: {decomp_sol.status.name}")
         logging.info(f"Termination Reason: {decomp_sol.termination_reason}")
         logging.info(f"Iterations: {decomp_sol.iterations}/{decomp_sol.max_iterations} (OC blocks added: {oc_blocks_added}, Duplicate patterns skipped: {duplicate_oc_blocks_skipped})")

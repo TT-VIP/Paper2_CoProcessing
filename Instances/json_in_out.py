@@ -138,6 +138,10 @@ def write_instance_to_json(
         "generator_version": generator_version
     }
 
+    instance_data.instance_name = instance_id
+    instance_data.instance_size_class = size_class
+    instance_data.instance_regime = structural_regime
+
     payload = {
         "metadata": metadata,
         "data": _make_json_serializable(asdict(instance_data))
@@ -166,6 +170,7 @@ def read_instanceData_from_json(json_path: Path) -> InstanceData:
     with json_path.open('r', encoding='utf-8') as file:
         payload = json.load(file)
 
+    metadata = payload["metadata"]
     data = payload["data"]
 
     # Convert lists back to ranges for index sets
@@ -192,6 +197,10 @@ def read_instanceData_from_json(json_path: Path) -> InstanceData:
     data['M_primal']['r_sw'] = _keys_to_int_recursive(data['M_primal']['r_sw'])
     data['M_primal']['q_cf'] = _keys_to_int_recursive(data['M_primal']['q_cf'])
     data['M_primal']['q_scw'] = _keys_to_int_recursive(data['M_primal']['q_scw'])
+
+    data["instance_name"] = metadata["instance_id"]
+    data["instance_size_class"] = metadata["size_class"]
+    data["instance_regime"] = metadata["structural_regime"]
 
     return InstanceData(**data)
     # instance = InstanceData(

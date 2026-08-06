@@ -12,6 +12,11 @@ from typing import List, Dict, Tuple, Any, Literal
 #region Instance data class
 @dataclass(frozen=False)
 class InstanceData:
+    # Instance metadata
+    instance_name: str
+    instance_size_class: str
+    instance_regime: str
+    
     # Sets (sizes)
     G_max: int      # Number of Generation spots
     S_max: int      # Number of Transfer stations
